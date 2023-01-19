@@ -1,2 +1,3 @@
-# rust-ffsr
+# Crate rust-ffsr
+
 Flaming-fast Scheme reader
