@@ -1,4 +1,5 @@
 use ffsr::lexer::Lexer;
+use ffsr::Sourced;
 use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 

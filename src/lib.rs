@@ -52,11 +52,22 @@ YYYYY
 )]
 #![forbid(unsafe_code)]
 
-// use ...
+use std::slice::SliceIndex;
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
 // ------------------------------------------------------------------------------------------------
+
+pub trait Sourced {
+    fn source_str(&self) -> &str;
+
+    fn get<I>(&self, index: I) -> Option<&I::Output>
+    where
+        I: SliceIndex<str>,
+    {
+        self.source_str().get(index)
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 // Public Functions

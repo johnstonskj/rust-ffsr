@@ -10,8 +10,9 @@ YYYYY
 */
 
 use crate::input::Input;
-use crate::lexer::iter::Tokens;
+use crate::lexer::iter::TokenIter;
 use crate::lexer::token::Token;
+use crate::Sourced;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -56,17 +57,21 @@ impl<'a> From<Input<'a>> for Lexer<'a> {
     }
 }
 
+impl Sourced for Lexer<'_> {
+    #[inline(always)]
+    fn source_str(&self) -> &str {
+        self.source.source_str()
+    }
+}
+
 impl<'a> Lexer<'a> {
-    pub fn tokens(&'a self) -> Tokens<'a> {
-        Tokens::from(self.source.char_indices())
+    pub fn tokens(&'a self) -> TokenIter<'a> {
+        TokenIter::from(self.source.char_indices())
     }
 
-    pub fn source_str(&self) -> &str {
-        self.source.source()
-    }
-
+    #[inline(always)]
     pub fn token_str(&self, token: &Token) -> &str {
-        self.source.get(token.byte_span().as_range()).unwrap()
+        self.get(token.byte_span().as_range()).unwrap()
     }
 }
 

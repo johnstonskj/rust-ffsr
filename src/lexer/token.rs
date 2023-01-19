@@ -44,6 +44,7 @@ pub enum TokenKind {
     Dot,
     OpenVector,
     OpenByteVector,
+    Identifier,
     Character,
     String,
     Numeric,
@@ -76,22 +77,27 @@ impl Default for Span {
 }
 
 impl Span {
+    #[inline(always)]
     pub fn new(start: usize, end: usize) -> Self {
         Self { start, end }
     }
 
+    #[inline(always)]
     pub fn zero() -> Self {
         Self::new(0, 0)
     }
 
+    #[inline(always)]
     pub fn start(&self) -> usize {
         self.start
     }
 
+    #[inline(always)]
     pub fn end(&self) -> usize {
         self.end
     }
 
+    #[inline(always)]
     pub fn as_range(&self) -> Range<usize> {
         self.start..self.end
     }

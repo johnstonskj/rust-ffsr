@@ -9,8 +9,11 @@ YYYYY
 
 */
 
-use crate::input::indices::{CharIndex, Index};
-use std::{slice::SliceIndex, str::CharIndices as ActualCharIndices};
+use crate::{
+    input::indices::{CharIndex, Index},
+    Sourced,
+};
+use std::str::CharIndices as ActualCharIndices;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -59,6 +62,13 @@ impl Iterator for CharIndices<'_> {
     }
 }
 
+impl Sourced for CharIndices<'_> {
+    #[inline(always)]
+    fn source_str(&self) -> &str {
+        self.source
+    }
+}
+
 impl<'a> CharIndices<'a> {
     pub fn new(source: &'a str) -> Self {
         Self {
@@ -91,15 +101,9 @@ impl<'a> CharIndices<'a> {
         }
     }
 
+    #[inline(always)]
     pub fn current_index(&self) -> Index {
         self.current_index
-    }
-
-    pub fn get<I>(&self, index: I) -> Option<&I::Output>
-    where
-        I: SliceIndex<str>,
-    {
-        self.source.get(index)
     }
 }
 

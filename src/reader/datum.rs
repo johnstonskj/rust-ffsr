@@ -9,9 +9,7 @@ YYYYY
 
 */
 
-use crate::lexer::Lexer;
-use crate::reader::iter::DatumIter;
-use crate::Sourced;
+// use ...
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -21,9 +19,17 @@ use crate::Sourced;
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug)]
-pub struct Reader<'a> {
-    source: Lexer<'a>,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Datum {
+    String(String),
+    Comment(Comment),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Comment {
+    Datum(Box<Datum>),
+    Block(String),
+    Line(String),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -38,23 +44,17 @@ pub struct Reader<'a> {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl<'a> From<Lexer<'a>> for Reader<'a> {
-    fn from(source: Lexer<'a>) -> Self {
-        Self { source }
+impl From<Datum> for Comment {
+    fn from(v: Datum) -> Self {
+        Self::Datum(Box::new(v))
     }
 }
 
-impl Sourced for Reader<'_> {
-    #[inline(always)]
-    fn source_str(&self) -> &str {
-        self.source.source_str()
-    }
-}
+// ------------------------------------------------------------------------------------------------
 
-impl<'a> Reader<'a> {
-    #[inline(always)]
-    pub fn iter(&'a self) -> DatumIter<'a> {
-        DatumIter::from(self.source.tokens())
+impl From<Comment> for Datum {
+    fn from(v: Comment) -> Self {
+        Self::Comment(v)
     }
 }
 
@@ -65,9 +65,3 @@ impl<'a> Reader<'a> {
 // ------------------------------------------------------------------------------------------------
 // Modules
 // ------------------------------------------------------------------------------------------------
-
-mod internals;
-
-pub mod datum;
-
-pub mod iter;

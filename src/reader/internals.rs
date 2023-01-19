@@ -9,9 +9,7 @@ YYYYY
 
 */
 
-use crate::lexer::Lexer;
-use crate::reader::iter::DatumIter;
-use crate::Sourced;
+// use ...
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -21,9 +19,14 @@ use crate::Sourced;
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Debug)]
-pub struct Reader<'a> {
-    source: Lexer<'a>,
+#[derive(Clone, Debug)]
+pub(crate) struct IteratorState {
+    state: State,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub(crate) enum State {
+    Nothing,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -38,23 +41,23 @@ pub struct Reader<'a> {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl<'a> From<Lexer<'a>> for Reader<'a> {
-    fn from(source: Lexer<'a>) -> Self {
-        Self { source }
+impl Default for IteratorState {
+    fn default() -> Self {
+        Self {
+            state: State::Nothing,
+        }
     }
 }
 
-impl Sourced for Reader<'_> {
+impl IteratorState {
     #[inline(always)]
-    fn source_str(&self) -> &str {
-        self.source.source_str()
+    pub(crate) fn state(&self) -> State {
+        self.state
     }
-}
 
-impl<'a> Reader<'a> {
     #[inline(always)]
-    pub fn iter(&'a self) -> DatumIter<'a> {
-        DatumIter::from(self.source.tokens())
+    pub(crate) fn set_state(&mut self, state: State) {
+        self.state = state;
     }
 }
 
@@ -65,9 +68,3 @@ impl<'a> Reader<'a> {
 // ------------------------------------------------------------------------------------------------
 // Modules
 // ------------------------------------------------------------------------------------------------
-
-mod internals;
-
-pub mod datum;
-
-pub mod iter;

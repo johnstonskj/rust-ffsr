@@ -16,6 +16,7 @@ use crate::input::indices::CharIndex;
 use crate::input::iter::CharIndices;
 use crate::lexer::internals::{IteratorState, State};
 use crate::lexer::token::{Span, Token, TokenKind};
+use crate::Sourced;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -26,7 +27,7 @@ use crate::lexer::token::{Span, Token, TokenKind};
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug)]
-pub struct Tokens<'a> {
+pub struct TokenIter<'a> {
     state_stack: Vec<IteratorState>,
     chars: CharIndices<'a>,
 }
@@ -74,7 +75,7 @@ macro_rules! return_error {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl<'a> From<CharIndices<'a>> for Tokens<'a> {
+impl<'a> From<CharIndices<'a>> for TokenIter<'a> {
     fn from(chars: CharIndices<'a>) -> Self {
         Self {
             state_stack: Vec::default(),
@@ -83,7 +84,14 @@ impl<'a> From<CharIndices<'a>> for Tokens<'a> {
     }
 }
 
-impl Iterator for Tokens<'_> {
+impl Sourced for TokenIter<'_> {
+    #[inline(always)]
+    fn source_str(&self) -> &str {
+        self.chars.source_str()
+    }
+}
+
+impl Iterator for TokenIter<'_> {
     type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -137,6 +145,20 @@ impl Iterator for Tokens<'_> {
                 (State::Nothing | State::InWhitespace, '.') => {
                     current_state.set_token_start(&char_index);
                     return_token!(current_state, char_index, Dot => Nothing);
+                }
+                // --------------------------------------------------------------------------------
+                // Identifier values
+                (State::Nothing | State::InWhitespace, '|') => {
+                    current_state.set_token_start(&char_index);
+                    current_state.set_state(State::InVBarIdentifier);
+                }
+                (State::Nothing | State::InWhitespace, c) if c.is_ascii_alphabetic() => {
+                    current_state.set_token_start(&char_index);
+                    current_state.set_state(State::InIdentifier);
+                }
+                (State::InIdentifier, c) if c.is_ascii_alphabetic() => {}
+                (State::InIdentifier, _) => {
+                    return_token!(current_state, char_index, Identifier => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // String values
@@ -275,19 +297,27 @@ impl Iterator for Tokens<'_> {
                 }
             }
         }
+        if !self.state_stack.is_empty() {
+            panic!("State Stack: {:#?}", self.state_stack);
+        }
         // TODO:!! fix logic to capture last token before end!
         match current_state.state() {
             // ***** Safe Cases *****
             State::InDirective => {
                 return_token!(current_state, last_char_index, Directive);
             }
-            State::InIdentifier => todo!("add identifier cleanup"),
+            State::InIdentifier => {
+                return_token!(current_state, last_char_index, Identifier);
+            }
             State::InNumeric => todo!("add numeric cleanup"),
             State::InCharacter => todo!("add character cleanup"),
             State::InLineComment => {
                 return_token!(current_state, last_char_index, LineComment);
             }
             // ***** Error Cases *****
+            State::InVBarIdentifier => {
+                panic!();
+            }
             State::InSpecial => {
                 return_error!(current_state, last_char_index, unclosed_special);
             }
@@ -305,31 +335,36 @@ impl Iterator for Tokens<'_> {
     }
 }
 
-impl Tokens<'_> {
+impl TokenIter<'_> {
     fn push_state(&mut self, current_state: IteratorState, new_state: State) -> IteratorState {
         let new_state = current_state.clone_with_new_state(new_state);
         self.state_stack.push(current_state);
         new_state
     }
 
+    #[inline(always)]
     fn pop_state(&mut self) -> IteratorState {
         self.state_stack.pop().unwrap()
     }
 
+    #[inline(always)]
     fn next_char(&mut self) -> Option<CharIndex> {
         self.chars.next()
     }
 
-    // fn current_index(&self) -> Index {
-    //     self.chars.current_index()
-    // }
-
+    #[inline(always)]
     fn peek_next_char(&mut self) -> Option<&CharIndex> {
         self.chars.peek()
     }
 
+    #[inline(always)]
     fn push_back_char(&mut self, index: CharIndex) {
         self.chars.push_back(index)
+    }
+
+    #[inline(always)]
+    pub fn token_str(&self, token: &Token) -> &str {
+        self.get(token.byte_span().as_range()).unwrap()
     }
 }
 

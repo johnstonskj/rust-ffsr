@@ -9,7 +9,14 @@ YYYYY
 
 */
 
-use crate::input::indices::{CharIndex, Index};
+use crate::error::Error;
+use crate::lexer::iter::TokenIter;
+use crate::lexer::token::TokenKind;
+use crate::reader::{
+    datum::{Comment, Datum},
+    internals::IteratorState,
+};
+use std::collections::HashMap;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -19,29 +26,12 @@ use crate::input::indices::{CharIndex, Index};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub(crate) struct IteratorState {
-    state: State,
-    token_starts_at: Index,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum State {
-    Nothing,
-    InWhitespace,
-    InDirective,
-    InIdentifier,
-    InVBarIdentifier,
-    InNumeric,
-    InString,
-    InStringEscape,
-    InStringHexEscape,
-    InSpecial,
-    InCharacter,
-    InLineComment,
-    InBlockComment,
-    InOpenByteVector,
-    InDatumRef,
+#[derive(Debug)]
+pub struct DatumIter<'a> {
+    source: TokenIter<'a>,
+    return_comments: bool,
+    state_stack: Vec<IteratorState>,
+    ref_table: HashMap<u16, Datum>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -56,42 +46,45 @@ pub(crate) enum State {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl Default for IteratorState {
-    fn default() -> Self {
+impl<'a> From<TokenIter<'a>> for DatumIter<'a> {
+    fn from(source: TokenIter<'a>) -> Self {
         Self {
-            state: State::Nothing,
-            token_starts_at: Index::from(0),
+            source,
+            return_comments: false,
+            state_stack: Default::default(),
+            ref_table: Default::default(),
         }
     }
 }
 
-impl IteratorState {
-    #[inline(always)]
-    pub(crate) fn clone_with_new_state(&self, state: State) -> Self {
-        Self {
-            state,
-            ..self.clone()
+impl Iterator for DatumIter<'_> {
+    type Item = Result<Datum, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current_state = IteratorState::default();
+        while let Some(token) = self.source.next() {
+            let token = match token {
+                Ok(t) => t,
+                Err(e) => {
+                    return Some(Err(e));
+                }
+            };
+
+            match (current_state.state(), token.kind()) {
+                (_, TokenKind::BlockComment) if self.return_comments => {
+                    let content = self.source.token_str(&token);
+                    return Some(Ok(Comment::Block(content.to_string()).into()));
+                }
+                (_, TokenKind::LineComment) if self.return_comments => {
+                    let content = self.source.token_str(&token);
+                    return Some(Ok(Comment::Line(content.to_string()).into()));
+                }
+                _ => {
+                    eprintln!("{:?}", token);
+                }
+            }
         }
-    }
-
-    #[inline(always)]
-    pub(crate) fn state(&self) -> State {
-        self.state
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_state(&mut self, state: State) {
-        self.state = state;
-    }
-
-    #[inline(always)]
-    pub(crate) fn token_starts_at(&self) -> Index {
-        self.token_starts_at
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_token_start(&mut self, index: &CharIndex) {
-        self.token_starts_at = index.index();
+        None
     }
 }
 

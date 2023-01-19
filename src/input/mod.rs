@@ -10,8 +10,8 @@ YYYYY
 */
 
 use crate::input::iter::CharIndices;
+use crate::Sourced;
 use std::borrow::{Borrow, Cow};
-use std::slice::SliceIndex;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -23,7 +23,7 @@ use std::slice::SliceIndex;
 
 #[derive(Debug)]
 pub struct Input<'a> {
-    input: Cow<'a, str>,
+    source: Cow<'a, str>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -33,7 +33,7 @@ pub struct Input<'a> {
 impl<'a> From<&'a str> for Input<'a> {
     fn from(s: &'a str) -> Self {
         Self {
-            input: Cow::Borrowed(s),
+            source: Cow::Borrowed(s),
         }
     }
 }
@@ -41,25 +41,21 @@ impl<'a> From<&'a str> for Input<'a> {
 impl From<String> for Input<'_> {
     fn from(s: String) -> Self {
         Self {
-            input: Cow::Owned(s),
+            source: Cow::Owned(s),
         }
+    }
+}
+
+impl Sourced for Input<'_> {
+    #[inline(always)]
+    fn source_str(&self) -> &str {
+        self.source.borrow()
     }
 }
 
 impl<'a> Input<'a> {
     pub fn char_indices(&'a self) -> CharIndices<'a> {
-        CharIndices::new(&self.input)
-    }
-
-    pub fn source(&'a self) -> &'a str {
-        self.input.borrow()
-    }
-
-    pub fn get<I>(&self, index: I) -> Option<&I::Output>
-    where
-        I: SliceIndex<str>,
-    {
-        self.input.get(index)
+        CharIndices::new(&self.source)
     }
 }
 

@@ -1,4 +1,5 @@
 use ffsr::lexer::Lexer;
+use ffsr::Sourced;
 
 #[test]
 fn test_lexer_incomplete_special() {

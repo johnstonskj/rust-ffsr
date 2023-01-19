@@ -90,6 +90,7 @@ impl Add<usize> for Index {
 }
 
 impl Index {
+    #[inline(always)]
     pub fn new(byte: usize, character: usize) -> Self {
         Self { byte, character }
     }
@@ -104,6 +105,7 @@ impl Index {
         self.character
     }
 
+    #[inline(always)]
     pub fn to_char_index(&self, character: char) -> CharIndex {
         CharIndex::new_from(*self, character)
     }
@@ -162,6 +164,7 @@ impl Sub<(usize, usize)> for CharIndex {
 }
 
 impl CharIndex {
+    #[inline(always)]
     pub fn new(byte_index: usize, char_index: usize, character: char) -> Self {
         Self {
             index: Index::new(byte_index, char_index),
@@ -169,6 +172,7 @@ impl CharIndex {
         }
     }
 
+    #[inline(always)]
     pub fn new_from(index: Index, character: char) -> Self {
         Self { index, character }
     }
