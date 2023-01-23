@@ -20,17 +20,7 @@ YYYYY
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Datum {
-    String(String),
-    Comment(Comment),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Comment {
-    Datum(Box<Datum>),
-    Block(String),
-    Line(String),
-}
+pub struct SByteVector(Vec<u8>);
 
 // ------------------------------------------------------------------------------------------------
 // Public Functions
@@ -43,20 +33,6 @@ pub enum Comment {
 // ------------------------------------------------------------------------------------------------
 // Implementations
 // ------------------------------------------------------------------------------------------------
-
-impl From<Datum> for Comment {
-    fn from(v: Datum) -> Self {
-        Self::Datum(Box::new(v))
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
-
-impl From<Comment> for Datum {
-    fn from(v: Comment) -> Self {
-        Self::Comment(v)
-    }
-}
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

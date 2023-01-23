@@ -9,11 +9,14 @@ fn test_lexer_line_comment() {
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("t"));
+    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#t"));
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_line_comment());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("; ignore this: #f"));
+    assert_eq!(
+        lexer.token_str(&token),
+        Cow::Borrowed("; ignore this: #f\n")
+    );
 
     assert!(tokens.next().is_none());
 }
@@ -25,7 +28,7 @@ fn test_lexer_line_comment_at_eoi() {
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("t"));
+    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#t"));
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_line_comment());

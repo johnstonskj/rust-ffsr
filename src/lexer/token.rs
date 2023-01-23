@@ -9,8 +9,11 @@ YYYYY
 
 */
 
-use crate::input::indices::Index;
-use std::ops::Range;
+use crate::input::indices::{CharIndex, Index};
+use std::{
+    fmt::Display,
+    ops::{Range, RangeInclusive},
+};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -48,7 +51,6 @@ pub enum TokenKind {
     Character,
     String,
     Numeric,
-    Symbol,
     Boolean,
     LineComment,
     BlockComment,
@@ -83,6 +85,16 @@ impl Span {
     }
 
     #[inline(always)]
+    pub fn new_byte_span_from(s: &str) -> Self {
+        Self::new(0, s.len() - 1)
+    }
+
+    #[inline(always)]
+    pub fn new_char_span_from(s: &str) -> Self {
+        Self::new(0, s.chars().count())
+    }
+
+    #[inline(always)]
     pub fn zero() -> Self {
         Self::new(0, 0)
     }
@@ -101,16 +113,29 @@ impl Span {
     pub fn as_range(&self) -> Range<usize> {
         self.start..self.end
     }
+
+    #[inline(always)]
+    pub fn as_range_inclusive(&self) -> RangeInclusive<usize> {
+        self.start..=self.end
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
 
 impl Token {
-    pub(crate) fn new(kind: TokenKind, start: Index, end: Index) -> Self {
+    pub(crate) fn new(kind: TokenKind, start: Index, end: CharIndex) -> Self {
         Self {
             kind,
-            character_span: Span::new(start.character(), end.character()),
-            byte_span: Span::new(start.byte(), end.byte() + 1),
+            character_span: Span::new(start.character(), end.index().character()),
+            byte_span: Span::new(start.byte(), end.index().byte()),
+        }
+    }
+
+    pub(crate) fn new_and_add_char(kind: TokenKind, start: Index, end: CharIndex) -> Self {
+        Self {
+            kind,
+            character_span: Span::new(start.character(), end.index().character()),
+            byte_span: Span::new(start.byte(), end.index().byte() + end.char_width()),
         }
     }
 
@@ -195,6 +220,11 @@ impl Token {
     }
 
     #[inline(always)]
+    pub fn is_identifier(&self) -> bool {
+        matches!(&self.kind, TokenKind::Identifier)
+    }
+
+    #[inline(always)]
     pub fn is_character(&self) -> bool {
         matches!(&self.kind, TokenKind::Character)
     }
@@ -207,11 +237,6 @@ impl Token {
     #[inline(always)]
     pub fn is_numeric(&self) -> bool {
         matches!(&self.kind, TokenKind::Numeric)
-    }
-
-    #[inline(always)]
-    pub fn is_symbol(&self) -> bool {
-        matches!(&self.kind, TokenKind::Symbol)
     }
 
     #[inline(always)]
@@ -247,6 +272,39 @@ impl Token {
     #[inline(always)]
     pub fn is_directive(&self) -> bool {
         matches!(&self.kind, TokenKind::Directive)
+    }
+}
+
+// ------------------------------------------------------------------------------------------------
+
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::OpenParenthesis => "list start",
+                Self::CloseParenthesis => "list end",
+                Self::Quote => "quote",
+                Self::QuasiQuote => "quasiquote",
+                Self::Unquote => "unquote",
+                Self::UnquoteSplicing => "unquote-splicing",
+                Self::Dot => "dot",
+                Self::OpenVector => "vector start",
+                Self::OpenByteVector => "byte-vector start",
+                Self::Identifier => "identifier",
+                Self::Character => "character",
+                Self::String => "string",
+                Self::Numeric => "numeric",
+                Self::Boolean => "boolean",
+                Self::LineComment => "line comment[",
+                Self::BlockComment => "block comment",
+                Self::DatumComment => "datum comment",
+                Self::DatumAssign => "datum assignment",
+                Self::DatumRef => "datum reference",
+                Self::Directive => "directive",
+            }
+        )
     }
 }
 

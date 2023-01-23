@@ -9,7 +9,8 @@ YYYYY
 
 */
 
-use crate::input::indices::{CharIndex, Index};
+use super::{Datum, DatumValue};
+use std::fmt::{Debug, Display};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -19,38 +20,8 @@ use crate::input::indices::{CharIndex, Index};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub(crate) struct IteratorState {
-    state: State,
-    token_starts_at: Index,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum State {
-    Nothing,
-    InWhitespace,
-    InDirective,
-    InIdentifier,
-    InVBarIdentifier,
-    InNumberOrIdentifier,
-    InDotNumberOrIdentifier,
-    InPeculiarIdentifier,
-    InNumeric,
-    InString,
-    InStringEscape,
-    InStringHexEscape,
-    InStringHexEscapeDigits,
-    InSpecial,
-    InCharacter,
-    InCharacterName,
-    InCharacterX,
-    InCharacterXNum,
-    InLineComment,
-    InBlockComment,
-    InOpenByteVector(char),
-    InDatumRefNum,
-    InDatumRef,
-}
+#[derive(Clone, Default, PartialEq, Eq, Hash)]
+pub struct SList(Vec<Datum>);
 
 // ------------------------------------------------------------------------------------------------
 // Public Functions
@@ -64,44 +35,53 @@ pub(crate) enum State {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl Default for IteratorState {
-    fn default() -> Self {
-        Self {
-            state: State::Nothing,
-            token_starts_at: Index::from(0),
-        }
+impl Display for SList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({})",
+            self.0
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
     }
 }
 
-impl IteratorState {
-    // #[inline(always)]
-    // pub(crate) fn clone_with_new_state(&self, state: State) -> Self {
-    //     Self {
-    //         state,
-    //         ..self.clone()
-    //     }
-    // }
-
-    #[inline(always)]
-    pub(crate) fn state(&self) -> State {
-        self.state
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_state(&mut self, state: State) {
-        self.state = state;
-    }
-
-    #[inline(always)]
-    pub(crate) fn token_starts_at(&self) -> Index {
-        self.token_starts_at
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_token_start(&mut self, index: &CharIndex) {
-        self.token_starts_at = index.index();
+impl Debug for SList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "({})",
+            self.0
+                .iter()
+                .map(|d| format!("{:?}", d))
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
     }
 }
+
+impl From<SList> for Datum {
+    fn from(v: SList) -> Self {
+        Datum::List(v)
+    }
+}
+
+impl From<Datum> for SList {
+    fn from(v: Datum) -> Self {
+        Self(vec![v])
+    }
+}
+
+impl FromIterator<Datum> for SList {
+    fn from_iter<T: IntoIterator<Item = Datum>>(iter: T) -> Self {
+        Self(Vec::from_iter(iter))
+    }
+}
+
+impl DatumValue for SList {}
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

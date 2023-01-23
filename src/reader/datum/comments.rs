@@ -9,7 +9,12 @@ YYYYY
 
 */
 
-use crate::input::indices::{CharIndex, Index};
+use super::{Datum, DatumValue};
+use crate::error::Error;
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -19,37 +24,11 @@ use crate::input::indices::{CharIndex, Index};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub(crate) struct IteratorState {
-    state: State,
-    token_starts_at: Index,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum State {
-    Nothing,
-    InWhitespace,
-    InDirective,
-    InIdentifier,
-    InVBarIdentifier,
-    InNumberOrIdentifier,
-    InDotNumberOrIdentifier,
-    InPeculiarIdentifier,
-    InNumeric,
-    InString,
-    InStringEscape,
-    InStringHexEscape,
-    InStringHexEscapeDigits,
-    InSpecial,
-    InCharacter,
-    InCharacterName,
-    InCharacterX,
-    InCharacterXNum,
-    InLineComment,
-    InBlockComment,
-    InOpenByteVector(char),
-    InDatumRefNum,
-    InDatumRef,
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum SComment {
+    Datum(Box<Datum>),
+    Block(String),
+    Line(String),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -64,44 +43,49 @@ pub(crate) enum State {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl Default for IteratorState {
-    fn default() -> Self {
-        Self {
-            state: State::Nothing,
-            token_starts_at: Index::from(0),
+impl Display for SComment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SComment::Datum(v) => format!("#; {}", v),
+                SComment::Block(v) => format!("#| {} |#", v),
+                SComment::Line(v) => format!("; {}", v),
+            }
+        )
+    }
+}
+
+impl From<Datum> for SComment {
+    fn from(v: Datum) -> Self {
+        SComment::Datum(Box::new(v))
+    }
+}
+
+impl From<SComment> for Datum {
+    fn from(v: SComment) -> Self {
+        Self::Comment(v)
+    }
+}
+
+impl FromStr for SComment {
+    type Err = Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.starts_with(';') && !s.contains('\n') {
+            Ok(Self::Line(s[1..].trim().to_string()))
+        } else if s.starts_with("#|") && s.ends_with("|#") {
+            Ok(Self::Line(s[2..s.len() - 2].trim().to_string()))
+        } else if s.starts_with("#;") {
+            unimplemented!()
+        } else {
+            unimplemented! {}
         }
     }
 }
 
-impl IteratorState {
-    // #[inline(always)]
-    // pub(crate) fn clone_with_new_state(&self, state: State) -> Self {
-    //     Self {
-    //         state,
-    //         ..self.clone()
-    //     }
-    // }
-
-    #[inline(always)]
-    pub(crate) fn state(&self) -> State {
-        self.state
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_state(&mut self, state: State) {
-        self.state = state;
-    }
-
-    #[inline(always)]
-    pub(crate) fn token_starts_at(&self) -> Index {
-        self.token_starts_at
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_token_start(&mut self, index: &CharIndex) {
-        self.token_starts_at = index.index();
-    }
-}
+impl DatumValue for SComment {}
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

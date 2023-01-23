@@ -61,6 +61,10 @@ use std::slice::SliceIndex;
 pub trait Sourced {
     fn source_str(&self) -> &str;
 
+    fn source_len(&self) -> usize {
+        self.source_str().len()
+    }
+
     fn get<I>(&self, index: I) -> Option<&I::Output>
     where
         I: SliceIndex<str>,

@@ -40,6 +40,7 @@ impl<'a> From<&'a str> for Input<'a> {
 
 impl From<String> for Input<'_> {
     fn from(s: String) -> Self {
+        println!("Input from {:?}/{}", s, s.len());
         Self {
             source: Cow::Owned(s),
         }

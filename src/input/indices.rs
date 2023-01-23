@@ -188,6 +188,11 @@ impl CharIndex {
     }
 
     #[inline(always)]
+    pub fn set_byte_index(&mut self, index: usize) {
+        self.index.byte = index;
+    }
+
+    #[inline(always)]
     pub fn char_index(&self) -> usize {
         self.index.character()
     }
@@ -195,6 +200,11 @@ impl CharIndex {
     #[inline(always)]
     pub fn character(&self) -> char {
         self.character
+    }
+
+    #[inline(always)]
+    pub fn char_width(&self) -> usize {
+        self.character.len_utf8()
     }
 }
 

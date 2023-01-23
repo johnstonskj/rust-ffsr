@@ -10,13 +10,15 @@ YYYYY
 */
 
 use crate::error::{
-    unclosed_block_comment, unclosed_byte_vector, unclosed_special, unclosed_string, Error,
+    invalid_byte_vector_prefix, invalid_char_input, invalid_datum_label, invalid_string_escape,
+    unclosed_block_comment, unclosed_special, unclosed_string, Error,
 };
 use crate::input::indices::CharIndex;
 use crate::input::iter::CharIndices;
 use crate::lexer::internals::{IteratorState, State};
 use crate::lexer::token::{Span, Token, TokenKind};
 use crate::Sourced;
+use unicode_categories::UnicodeCategories;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -40,18 +42,34 @@ pub struct TokenIter<'a> {
 // Private Macros
 // ------------------------------------------------------------------------------------------------
 
-macro_rules! return_token {
+macro_rules! return_token_and_add_char {
     ($current_state:expr, $char_index:expr, $kind:ident => $state:ident) => {
         $current_state.set_state(State::$state);
-        return_token!($current_state, $char_index, $kind);
+        return_token_and_add_char!($current_state, $char_index, $kind);
     };
+    ($current_state:expr, $char_index:expr, $kind:ident) => {
+        let token = Some(Ok(Token::new_and_add_char(
+            TokenKind::$kind,
+            $current_state.token_starts_at(),
+            $char_index,
+        )));
+        println!("return_token {:?}", token);
+        return token;
+    };
+}
+
+macro_rules! return_token {
+    // ($current_state:expr, $char_index:expr, $kind:ident => $state:ident) => {
+    //     $current_state.set_state(State::$state);
+    //     return_token!($current_state, $char_index, $kind);
+    // };
     ($current_state:expr, $char_index:expr, $kind:ident) => {
         let token = Some(Ok(Token::new(
             TokenKind::$kind,
             $current_state.token_starts_at(),
-            $char_index.index(),
+            $char_index,
         )));
-        println!("{:?}", token);
+        println!("return_token {:?}", token);
         return token;
     };
 }
@@ -63,7 +81,7 @@ macro_rules! return_error {
             $current_state.token_starts_at().character(),
             $char_index.index().character(),
         ))));
-        println!("{:?}", err);
+        println!("return_error {:?}", err);
         return err;
     };
     ($current_state:expr, $char_index:expr, $error_fn:ident) => {
@@ -114,37 +132,64 @@ impl Iterator for TokenIter<'_> {
                 // Single character (mostly) tokens
                 (State::Nothing | State::InWhitespace, '(') => {
                     current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, OpenParenthesis => Nothing);
+                    return_token_and_add_char!(current_state, char_index, OpenParenthesis => Nothing);
                 }
                 (State::Nothing | State::InWhitespace, ')') => {
                     current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, CloseParenthesis => Nothing);
+                    return_token_and_add_char!(current_state, char_index, CloseParenthesis => Nothing);
                 }
                 (State::Nothing | State::InWhitespace, '\'') => {
                     current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, Quote => Nothing);
+                    return_token_and_add_char!(current_state, char_index, Quote => Nothing);
                 }
                 (State::Nothing | State::InWhitespace, '`') => {
                     current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, QuasiQuote => Nothing);
+                    return_token_and_add_char!(current_state, char_index, QuasiQuote => Nothing);
                 }
                 (State::Nothing | State::InWhitespace, ',') => {
                     current_state.set_token_start(&char_index);
                     if let Some(next_char) = self.peek_next_char() {
                         if next_char == &'@' {
                             let next_char = self.next_char().unwrap();
-                            return_token!(
+                            return_token_and_add_char!(
                                 current_state,
                                 next_char,
                                 UnquoteSplicing => Nothing
                             );
                         }
                     }
-                    return_token!(current_state, char_index, Unquote => Nothing);
+                    return_token_and_add_char!(current_state, char_index, Unquote => Nothing);
+                }
+                // --------------------------------------------------------------------------------
+                // These are ambiguous
+                (State::Nothing | State::InWhitespace, '+' | '-') => {
+                    current_state.set_token_start(&char_index);
+                    current_state.set_state(State::InNumberOrIdentifier);
                 }
                 (State::Nothing | State::InWhitespace, '.') => {
                     current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, Dot => Nothing);
+                    current_state.set_state(State::InDotNumberOrIdentifier);
+                }
+                (State::InNumberOrIdentifier | State::InDotNumberOrIdentifier, c)
+                    if c.is_ascii_digit() =>
+                {
+                    current_state.set_state(State::InNumeric);
+                }
+                (State::InNumberOrIdentifier, '.') => {
+                    current_state.set_state(State::InDotNumberOrIdentifier);
+                }
+                (State::InNumberOrIdentifier, c) if is_sign_subsequent(c) => {
+                    current_state.set_state(State::InPeculiarIdentifier);
+                }
+                (State::InDotNumberOrIdentifier, c) if is_dot_subsequent(c) => {
+                    current_state.set_state(State::InPeculiarIdentifier);
+                }
+                (State::InPeculiarIdentifier, c) if is_identifier_subsequent(c) => {}
+                (State::InPeculiarIdentifier, _) => {
+                    return_token_and_add_char!(current_state, char_index, Identifier => Nothing);
+                }
+                (State::InDotNumberOrIdentifier, _) => {
+                    return_token_and_add_char!(current_state, char_index, Dot => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // Identifier values
@@ -152,13 +197,13 @@ impl Iterator for TokenIter<'_> {
                     current_state.set_token_start(&char_index);
                     current_state.set_state(State::InVBarIdentifier);
                 }
-                (State::Nothing | State::InWhitespace, c) if c.is_ascii_alphabetic() => {
+                (State::Nothing | State::InWhitespace, c) if is_identifier_initial(c) => {
                     current_state.set_token_start(&char_index);
                     current_state.set_state(State::InIdentifier);
                 }
-                (State::InIdentifier, c) if c.is_ascii_alphabetic() => {}
+                (State::InIdentifier, c) if is_identifier_subsequent(c) => {}
                 (State::InIdentifier, _) => {
-                    return_token!(current_state, char_index, Identifier => Nothing);
+                    return_token_and_add_char!(current_state, char_index, Identifier => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // String values
@@ -170,21 +215,34 @@ impl Iterator for TokenIter<'_> {
                     current_state.set_state(State::InStringEscape);
                 }
                 (State::InString, '"') => {
-                    return_token!(current_state, char_index, String => Nothing);
+                    return_token_and_add_char!(current_state, char_index, String => Nothing);
                 }
                 (State::InString, _) => {}
-                (State::InStringEscape, 'a' | 'b' | 't' | 'n' | 'r' | '"' | '|' | ' ' | '\t') => {
+                // TODO: '\\' ⟨intraline whitespace⟩*⟨line ending⟩ ⟨intraline whitespace⟩*
+                (State::InStringEscape, c) if is_mnemonic_escape(c) => {
                     current_state.set_state(State::InString);
                 }
                 (State::InStringEscape, 'x') => {
                     current_state.set_state(State::InStringHexEscape);
                 }
-                (State::InStringHexEscape, d) if d.is_ascii_hexdigit() => {}
-                (State::InStringHexEscape, _) => {
+                (State::InStringHexEscape, d) if d.is_ascii_hexdigit() => {
+                    // R7Rs says `<hex digit>+`
+                    current_state.set_state(State::InStringHexEscapeDigits);
+                }
+                (State::InStringHexEscapeDigits, d) if d.is_ascii_hexdigit() => {}
+                (State::InStringHexEscapeDigits, ';') => {
                     // TODO: validate hex string
                     current_state.set_state(State::InString);
                 }
-                // TODO: handle "\\\n" line endings
+                (
+                    State::InStringEscape
+                    | State::InStringHexEscape
+                    | State::InStringHexEscapeDigits,
+                    _,
+                ) => {
+                    // TODO: Fix the span, it starts with the string start, not the escape start.
+                    return_error!(current_state, char_index, invalid_string_escape);
+                }
                 // --------------------------------------------------------------------------------
                 // Numeric values
                 (State::Nothing | State::InWhitespace, c) if c.is_ascii_digit() => {
@@ -195,36 +253,61 @@ impl Iterator for TokenIter<'_> {
                 // --------------------------------------------------------------------------------
                 // Start of special forms
                 (State::Nothing | State::InWhitespace, '#') => {
+                    current_state.set_token_start(&char_index);
                     current_state.set_state(State::InSpecial);
                 }
                 // --------------------------------------------------------------------------------
                 // Boolean values
                 (State::InSpecial, 't') => {
-                    current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, Boolean => Nothing);
+                    return_token_and_add_char!(current_state, char_index, Boolean => Nothing);
                 }
                 (State::InSpecial, 'f') => {
-                    current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, Boolean => Nothing);
+                    return_token_and_add_char!(current_state, char_index, Boolean => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // Vector values
                 (State::InSpecial, '(') => {
-                    current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index, OpenVector => Nothing);
+                    return_token_and_add_char!(current_state, char_index, OpenVector => Nothing);
                 }
                 (State::InSpecial, 'u') => {
-                    current_state = self.push_state(current_state, State::InOpenByteVector);
-                    current_state.set_token_start(&char_index);
-                    // "#u8(" => OpenByteVector
-                    current_state = self.pop_state();
+                    current_state.set_state(State::InOpenByteVector('u'));
+                }
+                (State::InOpenByteVector('u'), '8') => {
+                    current_state.set_state(State::InOpenByteVector('8'));
+                }
+                (State::InOpenByteVector('8'), '(') => {
+                    return_token_and_add_char!(current_state, char_index, OpenByteVector => Nothing);
+                }
+                (State::InOpenByteVector(_), _) => {
+                    return_error!(current_state, char_index, invalid_byte_vector_prefix);
                 }
                 // --------------------------------------------------------------------------------
                 // Character values
                 (State::InSpecial, '\\') => {
-                    current_state.set_token_start(&char_index);
-                    // TODO: peek for 'x' and hex value.
                     current_state.set_state(State::InCharacter);
+                }
+                (State::InCharacter, 'x') => {
+                    current_state.set_state(State::InCharacterX);
+                }
+                (State::InCharacter, c) if c.is_ascii_alphabetic() || c == '-' => {
+                    current_state.set_state(State::InCharacterName);
+                }
+                (State::InCharacter, _) => {
+                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
+                }
+                (State::InCharacterName, c) if c.is_ascii_alphabetic() || c == '-' => {}
+                (State::InCharacterName, _) => {
+                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
+                }
+                (State::InCharacterX, c) if c.is_ascii_hexdigit() => {
+                    current_state.set_state(State::InCharacterXNum);
+                }
+                (State::InCharacterXNum, c) if c.is_ascii_hexdigit() => {}
+                (State::InCharacterXNum, ';') => {
+                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
+                }
+                (State::InCharacterX, _) => {
+                    return_error!(current_state, char_index, invalid_char_input);
                 }
                 // --------------------------------------------------------------------------------
                 // Numeric values
@@ -234,34 +317,36 @@ impl Iterator for TokenIter<'_> {
                 // 'x' hex radix
                 // 'e' exact
                 // 'i' inexact
-                // Chez adds #<n>r where n in 2..=36
-                (State::InSpecial, 'b' | 'd' | 'e' | 'i' | 'o' | 'x') => {
+                (State::InSpecial, c) if is_numeric_prefix(c) => {
                     current_state.set_token_start(&char_index);
                     current_state.set_state(State::InNumeric);
                 }
-
                 // --------------------------------------------------------------------------------
                 // Directives
                 (State::InSpecial, '!') => {
-                    current_state.set_token_start(&char_index);
                     current_state.set_state(State::InDirective);
                 }
-                (State::InDirective, c) if c.is_alphabetic() || c == '-' => {}
+                (State::InDirective, c) if is_directive(c) => {}
                 (State::InDirective, _) => {
-                    return_token!(current_state, char_index, DatumAssign => Nothing);
+                    return_token_and_add_char!(current_state, char_index, Directive => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // Datum references
                 (State::InSpecial, c) if c.is_ascii_digit() => {
-                    current_state.set_token_start(&char_index);
+                    current_state.set_state(State::InDatumRefNum);
+                }
+                (State::InDatumRefNum, c) if c.is_ascii_digit() => {
                     current_state.set_state(State::InDatumRef);
                 }
                 (State::InDatumRef, c) if c.is_ascii_digit() => {}
                 (State::InDatumRef, '=') => {
-                    return_token!(current_state, char_index - (1, 1), DatumAssign => Nothing);
+                    return_token_and_add_char!(current_state, char_index, DatumAssign => Nothing);
                 }
                 (State::InDatumRef, '#') => {
-                    return_token!(current_state, char_index - (1, 1), DatumRef => Nothing);
+                    return_token_and_add_char!(current_state, char_index, DatumRef => Nothing);
+                }
+                (State::InDatumRef, _) => {
+                    return_error!(current_state, char_index, invalid_datum_label);
                 }
                 // --------------------------------------------------------------------------------
                 // Comment Forms
@@ -272,15 +357,13 @@ impl Iterator for TokenIter<'_> {
                 (State::InLineComment, c) if c != '\n' => {}
                 (State::InLineComment, '\n') => {
                     self.push_back_char(char_index);
-                    return_token!(current_state, char_index - (1, 0), LineComment => Nothing);
+                    return_token_and_add_char!(current_state, char_index, LineComment => Nothing);
                 }
                 (State::InSpecial, '|') => {
-                    current_state.set_token_start(&char_index);
                     current_state.set_state(State::InBlockComment);
                 }
                 (State::InSpecial, ';') => {
-                    current_state.set_token_start(&char_index);
-                    return_token!(current_state, char_index - (1, 1), DatumComment => Nothing);
+                    return_token_and_add_char!(current_state, char_index, DatumComment => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 (State::InSpecial, c) => {
@@ -297,22 +380,27 @@ impl Iterator for TokenIter<'_> {
                 }
             }
         }
+
         if !self.state_stack.is_empty() {
             panic!("State Stack: {:#?}", self.state_stack);
         }
-        // TODO:!! fix logic to capture last token before end!
+
+        last_char_index.set_byte_index(self.source_len());
+
         match current_state.state() {
             // ***** Safe Cases *****
             State::InDirective => {
                 return_token!(current_state, last_char_index, Directive);
             }
-            State::InIdentifier => {
+            State::InIdentifier | State::InPeculiarIdentifier | State::InNumberOrIdentifier => {
                 return_token!(current_state, last_char_index, Identifier);
             }
             State::InNumeric => todo!("add numeric cleanup"),
-            State::InCharacter => todo!("add character cleanup"),
             State::InLineComment => {
                 return_token!(current_state, last_char_index, LineComment);
+            }
+            State::InCharacterName | State::InCharacterX => {
+                return_token!(current_state, last_char_index, Character);
             }
             // ***** Error Cases *****
             State::InVBarIdentifier => {
@@ -321,14 +409,20 @@ impl Iterator for TokenIter<'_> {
             State::InSpecial => {
                 return_error!(current_state, last_char_index, unclosed_special);
             }
-            State::InString | State::InStringEscape | State::InStringHexEscape => {
+            State::InString => {
                 return_error!(current_state, last_char_index, unclosed_string);
+            }
+            State::InStringEscape | State::InStringHexEscape => {
+                return_error!(current_state, last_char_index, invalid_string_escape);
             }
             State::InBlockComment => {
                 return_error!(current_state, last_char_index, unclosed_block_comment);
             }
-            State::InOpenByteVector => {
-                return_error!(current_state, last_char_index, unclosed_byte_vector);
+            State::InOpenByteVector(_) => {
+                return_error!(current_state, last_char_index, invalid_byte_vector_prefix);
+            }
+            State::InCharacter | State::InCharacterXNum => {
+                return_error!(current_state, last_char_index, invalid_char_input);
             }
             _ => None,
         }
@@ -336,16 +430,16 @@ impl Iterator for TokenIter<'_> {
 }
 
 impl TokenIter<'_> {
-    fn push_state(&mut self, current_state: IteratorState, new_state: State) -> IteratorState {
-        let new_state = current_state.clone_with_new_state(new_state);
-        self.state_stack.push(current_state);
-        new_state
-    }
-
-    #[inline(always)]
-    fn pop_state(&mut self) -> IteratorState {
-        self.state_stack.pop().unwrap()
-    }
+    // fn push_state(&mut self, current_state: IteratorState, new_state: State) -> IteratorState {
+    //     let new_state = current_state.clone_with_new_state(new_state);
+    //     self.state_stack.push(current_state);
+    //     new_state
+    // }
+    //
+    // #[inline(always)]
+    // fn pop_state(&mut self) -> IteratorState {
+    //     self.state_stack.pop().unwrap()
+    // }
 
     #[inline(always)]
     fn next_char(&mut self) -> Option<CharIndex> {
@@ -371,6 +465,45 @@ impl TokenIter<'_> {
 // ------------------------------------------------------------------------------------------------
 // Private Functions
 // ------------------------------------------------------------------------------------------------
+
+#[inline(always)]
+fn is_identifier_initial(c: char) -> bool {
+    c.is_letter()
+        || [
+            '!', '$', '%', '&', '*', '/', ':', '<', '=', '>', '?', '^', '_', '~',
+        ]
+        .contains(&c)
+}
+
+#[inline(always)]
+fn is_identifier_subsequent(c: char) -> bool {
+    is_identifier_initial(c) || c.is_number_decimal_digit() || ['+', '-', '.', '@'].contains(&c)
+}
+
+#[inline(always)]
+fn is_sign_subsequent(c: char) -> bool {
+    is_identifier_initial(c) || ['+', '-', '@'].contains(&c)
+}
+
+#[inline(always)]
+fn is_dot_subsequent(c: char) -> bool {
+    is_sign_subsequent(c) || c == '.'
+}
+
+#[inline(always)]
+fn is_mnemonic_escape(c: char) -> bool {
+    ['a', 'b', 't', 'n', 'r', '"', '\\', '|'].contains(&c)
+}
+
+#[inline(always)]
+fn is_numeric_prefix(c: char) -> bool {
+    ['b', 'd', 'e', 'i', 'o', 'x'].contains(&c)
+}
+
+#[inline(always)]
+fn is_directive(c: char) -> bool {
+    c.is_alphabetic() || c == '-'
+}
 
 // ------------------------------------------------------------------------------------------------
 // Modules

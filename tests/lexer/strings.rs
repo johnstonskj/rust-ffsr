@@ -41,12 +41,12 @@ fn test_lexer_simple_string_with_escape() {
 
 #[test]
 fn test_lexer_simple_string_with_hex_escape() {
-    let lexer = Lexer::from("\"hel\\x00fdlo\"");
+    let lexer = Lexer::from("\"hel\\x00fd;lo\"");
     let mut tokens = lexer.tokens();
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_string());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("\"hel\\x00fdlo\""));
+    assert_eq!(lexer.token_str(&token), Cow::Borrowed("\"hel\\x00fd;lo\""));
 
     assert!(tokens.next().is_none());
 }
@@ -62,6 +62,36 @@ fn test_lexer_incomplete_string_eoi() {
     assert_eq!(
         error.to_string(),
         format!("Token 'string' not closed, span: 0..6")
+    );
+    error.print(lexer.source_str());
+}
+
+#[test]
+fn test_lexer_simple_string_with_bad_hex_escape() {
+    let lexer = Lexer::from("\"hel\\x00fdlo\"");
+    let mut tokens = lexer.tokens();
+
+    let error = tokens.next().unwrap();
+    assert!(error.is_err());
+    let error = error.err().unwrap();
+    assert_eq!(
+        error.to_string(),
+        format!("Invalid, or badly formed, string escape; span: 0..10")
+    );
+    error.print(lexer.source_str());
+}
+
+#[test]
+fn test_lexer_simple_string_with_bad_mnemonic_escape() {
+    let lexer = Lexer::from("\"hel\\zlo\"");
+    let mut tokens = lexer.tokens();
+
+    let error = tokens.next().unwrap();
+    assert!(error.is_err());
+    let error = error.err().unwrap();
+    assert_eq!(
+        error.to_string(),
+        format!("Invalid, or badly formed, string escape; span: 0..5")
     );
     error.print(lexer.source_str());
 }

@@ -9,15 +9,15 @@ fn test_lexer_booleans() {
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("t"));
+    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#t"));
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("f"));
+    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#f"));
 
     let token = tokens.next().unwrap().expect("tokenizer failed");
     assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("t"));
+    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#t"));
 
     assert!(tokens.next().is_none());
 }

@@ -9,7 +9,11 @@ YYYYY
 
 */
 
-use crate::input::indices::{CharIndex, Index};
+use crate::{error::Error, lexer::token::Span};
+use std::{
+    fmt::{Debug, Display},
+    str::FromStr,
+};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -19,37 +23,19 @@ use crate::input::indices::{CharIndex, Index};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub(crate) struct IteratorState {
-    state: State,
-    token_starts_at: Index,
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub enum Datum {
+    Boolean(SBoolean),
+    Char(SChar),
+    String(SString),
+    Comment(SComment),
+    List(SList),
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) enum State {
-    Nothing,
-    InWhitespace,
-    InDirective,
-    InIdentifier,
-    InVBarIdentifier,
-    InNumberOrIdentifier,
-    InDotNumberOrIdentifier,
-    InPeculiarIdentifier,
-    InNumeric,
-    InString,
-    InStringEscape,
-    InStringHexEscape,
-    InStringHexEscapeDigits,
-    InSpecial,
-    InCharacter,
-    InCharacterName,
-    InCharacterX,
-    InCharacterXNum,
-    InLineComment,
-    InBlockComment,
-    InOpenByteVector(char),
-    InDatumRefNum,
-    InDatumRef,
+pub trait DatumValue: Display + Debug + Into<Datum> {}
+
+pub trait SimpleDatumValue: DatumValue + FromStr {
+    fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error>;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -64,42 +50,35 @@ pub(crate) enum State {
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl Default for IteratorState {
-    fn default() -> Self {
-        Self {
-            state: State::Nothing,
-            token_starts_at: Index::from(0),
-        }
+impl Display for Datum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Datum::Boolean(v) => v.to_string(),
+                Datum::Char(v) => v.to_string(),
+                Datum::String(v) => v.to_string(),
+                Datum::Comment(v) => v.to_string(),
+                Datum::List(v) => v.to_string(),
+            }
+        )
     }
 }
 
-impl IteratorState {
-    // #[inline(always)]
-    // pub(crate) fn clone_with_new_state(&self, state: State) -> Self {
-    //     Self {
-    //         state,
-    //         ..self.clone()
-    //     }
-    // }
-
-    #[inline(always)]
-    pub(crate) fn state(&self) -> State {
-        self.state
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_state(&mut self, state: State) {
-        self.state = state;
-    }
-
-    #[inline(always)]
-    pub(crate) fn token_starts_at(&self) -> Index {
-        self.token_starts_at
-    }
-
-    #[inline(always)]
-    pub(crate) fn set_token_start(&mut self, index: &CharIndex) {
-        self.token_starts_at = index.index();
+impl Debug for Datum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Boolean(v) => format!("{:?}", v),
+                Self::Char(v) => format!("{:?}", v),
+                Self::String(v) => format!("{:?}", v),
+                Self::Comment(v) => format!("{:?}", v),
+                Self::List(v) => format!("{:?}", v),
+            }
+        )
     }
 }
 
@@ -110,3 +89,18 @@ impl IteratorState {
 // ------------------------------------------------------------------------------------------------
 // Modules
 // ------------------------------------------------------------------------------------------------
+
+mod booleans;
+pub use booleans::SBoolean;
+
+mod chars;
+pub use chars::{EscapeDefault, EscapeUnicode, SChar};
+
+mod comments;
+pub use comments::SComment;
+
+mod lists;
+pub use lists::SList;
+
+mod strings;
+pub use strings::SString;
