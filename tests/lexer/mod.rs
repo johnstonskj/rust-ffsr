@@ -13,5 +13,6 @@ pub mod datum;
 pub mod directives;
 pub mod identifiers;
 pub mod lists;
+pub mod numbers;
 pub mod specials;
 pub mod strings;

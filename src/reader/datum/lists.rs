@@ -20,7 +20,7 @@ use std::fmt::{Debug, Display};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Default, PartialEq)]
 pub struct SList(Vec<Datum>);
 
 // ------------------------------------------------------------------------------------------------
@@ -72,6 +72,12 @@ impl From<SList> for Datum {
 impl From<Datum> for SList {
     fn from(v: Datum) -> Self {
         Self(vec![v])
+    }
+}
+
+impl From<Vec<Datum>> for SList {
+    fn from(v: Vec<Datum>) -> Self {
+        Self(v)
     }
 }
 

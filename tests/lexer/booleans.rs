@@ -3,7 +3,7 @@ use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
-fn test_lexer_booleans() {
+fn tbooleans() {
     let lexer = Lexer::from("#t #f#t");
     let mut tokens = lexer.tokens();
 

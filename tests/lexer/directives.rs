@@ -3,7 +3,7 @@ use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
-fn test_lexer_directive() {
+fn fold_case() {
     let lexer = Lexer::from("#!fold-case");
     let mut tokens = lexer.tokens();
 

@@ -95,6 +95,11 @@ impl DatumValue for SString {}
 
 impl SimpleDatumValue for SString {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
+        let s = if s.starts_with('"') && s.ends_with('"') {
+            &s[1..s.len() - 1]
+        } else {
+            s
+        };
         let mut buffer = String::with_capacity(s.len());
         let mut state = StringParseState::Normal;
         let mut mark: usize = 0;
@@ -171,8 +176,18 @@ impl SimpleDatumValue for SString {
 }
 
 impl SString {
-    // TODO: chars() -> SChar..
-    // TODO: char_indices() -> SChar..
+    pub fn as_str(&self) -> &str {
+        self.as_ref()
+    }
+
+    pub fn chars(&self) -> impl Iterator<Item = SChar> + '_ {
+        self.0.chars().map(SChar::from)
+    }
+
+    pub fn char_indices(&self) -> impl Iterator<Item = (usize, SChar)> + '_ {
+        self.0.char_indices().map(|(i, c)| (i, SChar::from(c)))
+    }
+
     pub fn escape_default(&self) -> impl Iterator<Item = char> + '_ {
         self.0.chars().flat_map(|c| SChar::from(c).escape_default())
     }

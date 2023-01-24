@@ -2,7 +2,13 @@ use ffsr::input::{indices::CharIndex, Input};
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_little_string() {
+fn empty() {
+    let input = Input::from("");
+    assert!(input.char_indices().next().is_none());
+}
+
+#[test]
+fn identifier() {
     let input = Input::from("hello");
     let mut char_indices = input.char_indices();
     assert_eq!(char_indices.next(), Some(CharIndex::new(0, 0, 'h')));

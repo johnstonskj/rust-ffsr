@@ -4,21 +4,16 @@ functions.
 
  */
 
-use crate::lexer::token::{Span, TokenKind};
+use crate::{
+    lexer::token::{Span, TokenKind},
+    reader::ReadContext,
+};
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use std::fmt::{Debug, Display};
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
 // ------------------------------------------------------------------------------------------------
-
-#[derive(Debug)]
-pub enum ReadContext {
-    TopLevel,
-    InList,
-    InVector,
-    InByteVector,
-}
 
 ///
 /// The Error type for this crate.
@@ -41,7 +36,7 @@ pub enum Error {
     InvalidByteVectorPrefix {
         span: Span,
     },
-    InvalidStringEscape {
+    InvalidEscapeString {
         span: Span,
     },
     InvalidBooleanInput {
@@ -58,6 +53,12 @@ pub enum Error {
         span: Span,
     },
     InvalidStringInput {
+        span: Span,
+    },
+    InvalidNumericInput {
+        span: Span,
+    },
+    InvalidIdentifierInput {
         span: Span,
     },
     InvalidDatumLabel {
@@ -117,10 +118,10 @@ pub fn invalid_byte_vector_prefix(span: Span) -> Error {
     Error::InvalidByteVectorPrefix { span }
 }
 
-/// Construct an `InvalidStringEscape` Error with the provided span.
+/// Construct an `InvalidEscapeString` Error with the provided span.
 #[inline]
-pub fn invalid_string_escape(span: Span) -> Error {
-    Error::InvalidStringEscape { span }
+pub fn invalid_escape_string(span: Span) -> Error {
+    Error::InvalidEscapeString { span }
 }
 
 /// Construct an `InvalidBooleanInput` Error with the provided span.
@@ -157,6 +158,18 @@ where
 #[inline]
 pub fn invalid_string_input(span: Span) -> Error {
     Error::InvalidStringInput { span }
+}
+
+/// Construct an `InvalidNumericInput` Error with the provided span.
+#[inline]
+pub fn invalid_numeric_input(span: Span) -> Error {
+    Error::InvalidNumericInput { span }
+}
+
+/// Construct an `InvalidIdentifierInput` Error with the provided span.
+#[inline]
+pub fn invalid_identifier_input(span: Span) -> Error {
+    Error::InvalidIdentifierInput { span }
 }
 
 /// Construct an `InvalidDatumLabel` Error with the provided span.
@@ -206,8 +219,8 @@ impl Display for Error {
                     "Invalid or incomplete byte vector prefix; span: {:?}",
                     span.as_range()
                 ),
-                Self::InvalidStringEscape { span } => format!(
-                    "Invalid, or badly formed, string escape; span: {:?}",
+                Self::InvalidEscapeString { span } => format!(
+                    "Invalid, or badly formed, character escape string; span: {:?}",
                     span.as_range()
                 ),
                 Self::InvalidBooleanInput { span } => format!(
@@ -229,6 +242,14 @@ impl Display for Error {
                 ),
                 Self::InvalidStringInput { span } => format!(
                     "Invalid, or badly formed, string input; span: {:?}",
+                    span.as_range()
+                ),
+                Self::InvalidNumericInput { span } => format!(
+                    "Invalid, or badly formed, numeric input; span: {:?}",
+                    span.as_range()
+                ),
+                Self::InvalidIdentifierInput { span } => format!(
+                    "Invalid, or badly formed, identifier input; span: {:?}",
                     span.as_range()
                 ),
                 Self::InvalidDatumLabel { span } => format!(
@@ -285,11 +306,13 @@ impl Error {
             Self::UnclosedTokenString { span: _ } => 21,
             Self::UnclosedTokenBlockComment { span: _ } => 22,
             Self::InvalidByteVectorPrefix { span: _ } => 23,
-            Self::InvalidStringEscape { span: _ } => 24,
+            Self::InvalidEscapeString { span: _ } => 24,
             Self::InvalidBooleanInput { span: _ } => 25,
             Self::InvalidCharInput { span: _ } => 26,
             Self::InvalidStringInput { span: _ } => 27,
-            Self::InvalidDatumLabel { span: _ } => 28,
+            Self::InvalidNumericInput { span: _ } => 28,
+            Self::InvalidIdentifierInput { span: _ } => 29,
+            Self::InvalidDatumLabel { span: _ } => 30,
             // Reader errors
             Self::DuplicateDatumLabel { label: _, span: _ } => 41,
             Self::UnknownDatumLabel { label: _, span: _ } => 42,
@@ -353,10 +376,10 @@ impl Error {
                     .with_note(format!("Expecting the prefix {}", "#u8(".fg(syntax)))
                     .finish(),
             ),
-            Self::InvalidStringEscape { span } => Some(
+            Self::InvalidEscapeString { span } => Some(
                 Report::build(ReportKind::Error, (), span.start())
                     .with_code(self.code())
-                    .with_message("Invalid, or badly formed, string escape")
+                    .with_message("Invalid, or badly formed, character escape string")
                     .with_label(
                         Label::new(span.as_range())
                             .with_message("Could not make this a valid mnemonic or hex escape"),
@@ -435,6 +458,26 @@ impl Error {
                     )
                     .finish(),
             ),
+            Self::InvalidNumericInput { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Invalid, or badly formed, numeric input")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("Not a valid numer"),
+                    )
+                    .finish(),
+            ),
+             Self::InvalidIdentifierInput { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Invalid, or badly formed, identifier input")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("Not a valid identifier"),
+                    )
+                    .finish(),
+            ),
             Self::InvalidDatumLabel { span } => Some(
                 Report::build(ReportKind::Error, (), span.start())
                     .with_code(self.code())
@@ -497,23 +540,6 @@ impl Error {
         } else {
             println!("{}", self);
         }
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
-
-impl Display for ReadContext {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::TopLevel => "top level",
-                Self::InList => "list",
-                Self::InVector => "vector",
-                Self::InByteVector => "byte vector",
-            }
-        )
     }
 }
 

@@ -9,15 +9,19 @@ YYYYY
 
 */
 
-use crate::error::{invalid_datum_label, unexpected_token, Error, ReadContext};
+use crate::error::{invalid_datum_label, unexpected_token, Error};
 use crate::lexer::iter::TokenIter;
 use crate::lexer::token::TokenKind;
+use crate::reader::datum::SNumber;
 use crate::reader::{
-    datum::{Datum, SBoolean, SChar, SComment, SString, SimpleDatumValue},
+    datum::{Datum, SBoolean, SChar, SComment, SString, SVector, SimpleDatumValue},
     internals::IteratorState,
     internals::State,
 };
 use std::str::FromStr;
+
+use super::datum::{SIdentifier, SList};
+use super::ReadContext;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -56,6 +60,38 @@ impl<'a> From<TokenIter<'a>> for DatumIter<'a> {
     }
 }
 
+macro_rules! atomic_datum {
+    ($me:expr, $current_state:expr, $datum:expr) => {
+        if $current_state.state() == State::List || $current_state.state() == State::Vector {
+            println!("reader adding {:?} to open list", $datum);
+            $current_state.add_content($datum.clone().into());
+        } else {
+            if let State::DatumAssign(label) = $current_state.state() {
+                println!("reading assigning {:?} to label {:?}", $datum, label);
+                $current_state = $me.state_stack.pop().unwrap();
+                $current_state.insert_labeled(label, $datum.clone().into());
+            }
+            println!("reader datum {:?}", $datum);
+            return Some(Ok($datum.into()));
+        }
+    };
+}
+
+macro_rules! atomic_datum_from_str {
+    ($me:expr, $current_state:expr, $token:expr => $datum_type:ty) => {
+        let datum = <$datum_type>::from_str_in_span($me.source.token_str(&$token), $token.span());
+        match datum {
+            Ok(datum) => {
+                atomic_datum!($me, $current_state, datum);
+            }
+            Err(e) => {
+                println!("reader error {:?}", e);
+                return Some(Err(e));
+            }
+        }
+    };
+}
+
 impl Iterator for DatumIter<'_> {
     type Item = Result<Datum, Error>;
 
@@ -69,56 +105,66 @@ impl Iterator for DatumIter<'_> {
                 }
             };
 
+            println!("reader match ({:?}, {:?})", current_state, token);
+
             match (current_state.state(), token.kind()) {
-                (State::Nothing | State::DatumAssign(_), TokenKind::Boolean) => {
-                    let datum =
-                        SBoolean::from_str_in_span(self.source.token_str(&token), token.span());
-                    let datum = datum.unwrap(); // TODO: FIX THIS
-                    if let State::DatumAssign(label) = current_state.state() {
-                        current_state = self.state_stack.pop().unwrap();
-                        current_state.insert_labeled(label, datum.into());
-                    }
-                    return Some(Ok(datum.into()));
+                (_, TokenKind::Identifier) => {
+                    atomic_datum_from_str!(self, current_state, token => SIdentifier);
                 }
-                (State::Nothing | State::DatumAssign(_), TokenKind::Character) => {
-                    let datum =
-                        SChar::from_str_in_span(self.source.token_str(&token), token.span());
-                    let datum = datum.unwrap(); // TODO: FIX THIS
-                    if let State::DatumAssign(label) = current_state.state() {
-                        current_state = self.state_stack.pop().unwrap();
-                        current_state.insert_labeled(label, datum.into());
-                    }
-                    return Some(Ok(datum.into()));
+                (_, TokenKind::Boolean) => {
+                    atomic_datum_from_str!(self, current_state, token => SBoolean);
                 }
-                (State::Nothing | State::DatumAssign(_), TokenKind::String) => {
-                    let datum =
-                        SString::from_str_in_span(self.source.token_str(&token), token.span());
-                    let datum = datum.unwrap(); // TODO: FIX THIS
-                    if let State::DatumAssign(label) = current_state.state() {
-                        current_state = self.state_stack.pop().unwrap();
-                        current_state.insert_labeled(label, datum.clone().into());
-                    }
-                    return Some(Ok(datum.into()));
+                (_, TokenKind::Character) => {
+                    atomic_datum_from_str!(self, current_state, token => SChar);
                 }
-                (State::Nothing, TokenKind::BlockComment) if self.return_comments => {
+                (_, TokenKind::String) => {
+                    atomic_datum_from_str!(self, current_state, token => SString);
+                }
+                (_, TokenKind::Numeric) => {
+                    atomic_datum_from_str!(self, current_state, token => SNumber);
+                }
+                (_, TokenKind::OpenParenthesis) => {
+                    self.state_stack.push(current_state);
+                    current_state =
+                        IteratorState::from(State::List).with_context(ReadContext::InList);
+                }
+                (State::List, TokenKind::CloseParenthesis) => {
+                    let datum = SList::from(current_state.into_content());
+                    current_state = self.state_stack.pop().unwrap();
+                    atomic_datum!(self, current_state, datum);
+                }
+                (_, TokenKind::OpenVector) => {
+                    self.state_stack.push(current_state);
+                    current_state =
+                        IteratorState::from(State::Vector).with_context(ReadContext::InList);
+                }
+                (State::Vector, TokenKind::CloseParenthesis) => {
+                    let datum = SVector::from(current_state.into_content());
+                    current_state = self.state_stack.pop().unwrap();
+                    atomic_datum!(self, current_state, datum);
+                }
+                (_, TokenKind::BlockComment) if self.return_comments => {
                     let content = self.source.token_str(&token);
                     let content = content[2..content.len() - 2].trim().to_string();
                     return Some(Ok(SComment::Block(content).into()));
                 }
-                (State::Nothing, TokenKind::LineComment) if self.return_comments => {
+                (_, TokenKind::LineComment) if self.return_comments => {
                     let content = self.source.token_str(&token);
                     let content = content[1..].trim().to_string();
                     return Some(Ok(SComment::Line(content).into()));
                 }
-                (State::Nothing, TokenKind::DatumComment) => {
+                (_, TokenKind::DatumComment) => {
                     self.state_stack.push(current_state);
                     current_state = State::DatumComment.into();
                 }
                 (State::DatumComment, k) if is_datum(k) && !self.return_comments => {
-                    println!("Dropping token {:?}; you said it was commented out", token);
+                    println!(
+                        "reader dropping token {:?}; you said it was commented out",
+                        token
+                    );
                     current_state = self.state_stack.pop().unwrap();
                 }
-                (State::Nothing, TokenKind::DatumAssign) => {
+                (_, TokenKind::DatumAssign) => {
                     let label_str = self.source.token_str(&token);
                     let label_str = &label_str[1..label_str.len() - 1];
                     let label = u16::from_str(label_str).expect("not a number?");
@@ -128,22 +174,32 @@ impl Iterator for DatumIter<'_> {
                     self.state_stack.push(current_state);
                     current_state = State::DatumAssign(label).into();
                 }
-                (State::Nothing, TokenKind::DatumRef) => {
+                (_, TokenKind::DatumRef) => {
                     let label_str = self.source.token_str(&token);
                     let label_str = &label_str[1..label_str.len() - 1];
                     let label = u16::from_str(label_str).expect("not a number?");
                     return Some(current_state.get_labeled(label, token.span()));
                 }
-                (_, kind) => {
+                (s, kind) => {
+                    eprintln!("reader not expecting {:?} in state {:?}", kind, s);
                     return Some(Err(unexpected_token(
                         kind,
-                        ReadContext::TopLevel,
+                        current_state.context(),
                         token.span(),
                     )));
                 }
             }
         }
         None
+    }
+}
+
+impl DatumIter<'_> {
+    pub(crate) fn with_comments(self) -> Self {
+        Self {
+            return_comments: true,
+            ..self
+        }
     }
 }
 

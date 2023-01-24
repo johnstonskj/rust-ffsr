@@ -2,7 +2,7 @@ use ffsr::input::{indices::CharIndex, Input};
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_unicode_string() {
+fn phrase() {
     let input = Input::from("ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ");
     let mut char_indices = input.char_indices();
     assert_eq!(char_indices.next(), Some(CharIndex::new(0, 0, '\u{0f68}')));

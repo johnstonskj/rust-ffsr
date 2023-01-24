@@ -3,7 +3,7 @@ use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
-fn test_lexer_line_comment() {
+fn line_comment() {
     let lexer = Lexer::from("#t ; ignore this: #f\n");
     let mut tokens = lexer.tokens();
 
@@ -22,7 +22,7 @@ fn test_lexer_line_comment() {
 }
 
 #[test]
-fn test_lexer_line_comment_at_eoi() {
+fn line_comment_at_eoi() {
     let lexer = Lexer::from("#t ; ignore this: #f");
     let mut tokens = lexer.tokens();
 

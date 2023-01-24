@@ -2,7 +2,7 @@ use ffsr::lexer::Lexer;
 use ffsr::Sourced;
 
 #[test]
-fn test_lexer_incomplete_special() {
+fn incomplete_special() {
     let lexer = Lexer::from("# ()");
     let mut tokens = lexer.tokens();
 

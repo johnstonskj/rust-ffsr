@@ -23,13 +23,16 @@ use std::{
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq)]
 pub enum Datum {
+    Identifier(SIdentifier),
     Boolean(SBoolean),
     Char(SChar),
+    Number(SNumber),
     String(SString),
-    Comment(SComment),
     List(SList),
+    Vector(SVector),
+    Comment(SComment),
 }
 
 pub trait DatumValue: Display + Debug + Into<Datum> {}
@@ -56,11 +59,14 @@ impl Display for Datum {
             f,
             "{}",
             match self {
-                Datum::Boolean(v) => v.to_string(),
-                Datum::Char(v) => v.to_string(),
-                Datum::String(v) => v.to_string(),
-                Datum::Comment(v) => v.to_string(),
-                Datum::List(v) => v.to_string(),
+                Self::Identifier(v) => v.to_string(),
+                Self::Boolean(v) => v.to_string(),
+                Self::Char(v) => v.to_string(),
+                Self::Number(v) => v.to_string(),
+                Self::String(v) => v.to_string(),
+                Self::List(v) => v.to_string(),
+                Self::Vector(v) => v.to_string(),
+                Self::Comment(v) => v.to_string(),
             }
         )
     }
@@ -72,11 +78,14 @@ impl Debug for Datum {
             f,
             "{}",
             match self {
+                Self::Identifier(v) => format!("{:?}", v),
                 Self::Boolean(v) => format!("{:?}", v),
                 Self::Char(v) => format!("{:?}", v),
+                Self::Number(v) => format!("{:?}", v),
                 Self::String(v) => format!("{:?}", v),
-                Self::Comment(v) => format!("{:?}", v),
                 Self::List(v) => format!("{:?}", v),
+                Self::Vector(v) => format!("{:?}", v),
+                Self::Comment(v) => format!("{:?}", v),
             }
         )
     }
@@ -99,8 +108,19 @@ pub use chars::{EscapeDefault, EscapeUnicode, SChar};
 mod comments;
 pub use comments::SComment;
 
+mod identifiers;
+pub use identifiers::SIdentifier;
+
 mod lists;
 pub use lists::SList;
 
+mod numbers;
+pub use numbers::{
+    SByte, SComplex, SExactComplex, SFloat, SInteger, SLong, SLongRational, SNumber, SRational,
+};
+
 mod strings;
 pub use strings::SString;
+
+mod vectors;
+pub use vectors::SVector;

@@ -3,7 +3,7 @@ use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
-fn test_lexer_datum_comment() {
+fn comment() {
     let lexer = Lexer::from("#;");
     let mut tokens = lexer.tokens();
 
@@ -13,7 +13,7 @@ fn test_lexer_datum_comment() {
 }
 
 #[test]
-fn test_lexer_datum_assign() {
+fn assignment() {
     let lexer = Lexer::from("#21=");
     let mut tokens = lexer.tokens();
 
@@ -23,7 +23,7 @@ fn test_lexer_datum_assign() {
 }
 
 #[test]
-fn test_lexer_datum_ref() {
+fn reference() {
     let lexer = Lexer::from("#21#");
     let mut tokens = lexer.tokens();
 

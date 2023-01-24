@@ -4,7 +4,7 @@ use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
-fn test_lexer_empty_string() {
+fn empty() {
     let lexer = Lexer::from("\"\"");
     let mut tokens = lexer.tokens();
 
@@ -16,7 +16,7 @@ fn test_lexer_empty_string() {
 }
 
 #[test]
-fn test_lexer_simple_string() {
+fn simple() {
     let lexer = Lexer::from("\"hello\"");
     let mut tokens = lexer.tokens();
 
@@ -28,7 +28,7 @@ fn test_lexer_simple_string() {
 }
 
 #[test]
-fn test_lexer_simple_string_with_escape() {
+fn with_escape() {
     let lexer = Lexer::from("\"hel\\\"lo\"");
     let mut tokens = lexer.tokens();
 
@@ -40,7 +40,7 @@ fn test_lexer_simple_string_with_escape() {
 }
 
 #[test]
-fn test_lexer_simple_string_with_hex_escape() {
+fn with_hex_escape() {
     let lexer = Lexer::from("\"hel\\x00fd;lo\"");
     let mut tokens = lexer.tokens();
 
@@ -52,7 +52,7 @@ fn test_lexer_simple_string_with_hex_escape() {
 }
 
 #[test]
-fn test_lexer_incomplete_string_eoi() {
+fn incomplete_string_eoi() {
     let lexer = Lexer::from("\" #t #f");
     let mut tokens = lexer.tokens();
 
@@ -67,7 +67,7 @@ fn test_lexer_incomplete_string_eoi() {
 }
 
 #[test]
-fn test_lexer_simple_string_with_bad_hex_escape() {
+fn with_bad_hex_escape() {
     let lexer = Lexer::from("\"hel\\x00fdlo\"");
     let mut tokens = lexer.tokens();
 
@@ -76,13 +76,13 @@ fn test_lexer_simple_string_with_bad_hex_escape() {
     let error = error.err().unwrap();
     assert_eq!(
         error.to_string(),
-        format!("Invalid, or badly formed, string escape; span: 0..10")
+        format!("Invalid, or badly formed, character escape string; span: 0..10")
     );
     error.print(lexer.source_str());
 }
 
 #[test]
-fn test_lexer_simple_string_with_bad_mnemonic_escape() {
+fn with_bad_mnemonic_escape() {
     let lexer = Lexer::from("\"hel\\zlo\"");
     let mut tokens = lexer.tokens();
 
@@ -91,7 +91,7 @@ fn test_lexer_simple_string_with_bad_mnemonic_escape() {
     let error = error.err().unwrap();
     assert_eq!(
         error.to_string(),
-        format!("Invalid, or badly formed, string escape; span: 0..5")
+        format!("Invalid, or badly formed, character escape string; span: 0..5")
     );
     error.print(lexer.source_str());
 }

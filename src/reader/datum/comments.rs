@@ -24,7 +24,7 @@ use std::{
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum SComment {
     Datum(Box<Datum>),
     Block(String),
@@ -76,7 +76,7 @@ impl FromStr for SComment {
         if s.starts_with(';') && !s.contains('\n') {
             Ok(Self::Line(s[1..].trim().to_string()))
         } else if s.starts_with("#|") && s.ends_with("|#") {
-            Ok(Self::Line(s[2..s.len() - 2].trim().to_string()))
+            Ok(Self::Block(s[2..s.len() - 2].trim().to_string()))
         } else if s.starts_with("#;") {
             unimplemented!()
         } else {

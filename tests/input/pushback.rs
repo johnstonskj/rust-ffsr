@@ -2,7 +2,7 @@ use ffsr::input::{indices::CharIndex, Input};
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_push_back() {
+fn push_back() {
     let input = Input::from("abcdef");
     let mut char_indices = input.char_indices();
     assert_eq!(char_indices.next(), Some(CharIndex::new(0, 0, 'a')));
@@ -21,7 +21,7 @@ fn test_push_back() {
 }
 
 #[test]
-fn test_peekable_push_back() {
+fn peekable_push_back() {
     let input = Input::from("abcdef");
     let mut char_indices = input.char_indices();
     assert_eq!(char_indices.peek(), Some(&CharIndex::new(0, 0, 'a')));

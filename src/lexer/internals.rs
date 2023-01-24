@@ -25,6 +25,12 @@ pub(crate) struct IteratorState {
     token_starts_at: Index,
 }
 
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct NumericState {
+    exact: Option<bool>,
+    radix: Option<u8>,
+}
+
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum State {
     Nothing,
@@ -32,6 +38,9 @@ pub(crate) enum State {
     InDirective,
     InIdentifier,
     InVBarIdentifier,
+    InVBarIdentifierEscape,
+    InVBarIdentifierHexEscape,
+    InVBarIdentifierHexEscapeDigits,
     InNumberOrIdentifier,
     InDotNumberOrIdentifier,
     InPeculiarIdentifier,
@@ -62,6 +71,61 @@ pub(crate) enum State {
 
 // ------------------------------------------------------------------------------------------------
 // Implementations
+// ------------------------------------------------------------------------------------------------
+
+impl NumericState {
+    #[inline(always)]
+    pub(crate) fn decimal() -> Self {
+        Self {
+            exact: Default::default(),
+            radix: Some(10),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn inexact_decimal() -> Self {
+        Self {
+            exact: Some(false),
+            radix: Some(10),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_exact(&self) -> Option<bool> {
+        self.exact
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_exact(&mut self, c: char) {
+        match c {
+            'e' => self.exact = Some(true),
+            'i' => self.exact = Some(false),
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn radix(&self) -> Option<u8> {
+        self.radix
+    }
+
+    #[inline(always)]
+    pub(crate) fn set_radix(&mut self, c: char) {
+        match c {
+            'b' => self.radix = Some(2),
+            'o' => self.radix = Some(8),
+            'd' => self.radix = Some(10),
+            'x' => self.radix = Some(16),
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn has_prefix(&self) -> bool {
+        self.exact.is_some() || self.radix.is_some()
+    }
+}
+
 // ------------------------------------------------------------------------------------------------
 
 impl Default for IteratorState {

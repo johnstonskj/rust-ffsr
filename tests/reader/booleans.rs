@@ -4,7 +4,18 @@ use ffsr::reader::Reader;
 use pretty_assertions::assert_eq;
 
 #[test]
-fn test_reader_boolean_true() {
+fn boolean_true() {
+    let reader = Reader::from(Lexer::from("#t "));
+    let mut iter = reader.iter();
+
+    let c = iter.next().unwrap(); // not None
+    let c = c.unwrap(); // not Err
+
+    assert_eq!(c, Datum::Boolean(SBoolean::from(true)));
+}
+
+#[test]
+fn boolean_true_eoi() {
     let reader = Reader::from(Lexer::from("#t"));
     let mut iter = reader.iter();
 
@@ -15,7 +26,18 @@ fn test_reader_boolean_true() {
 }
 
 #[test]
-fn test_reader_boolean_false() {
+fn boolean_false() {
+    let reader = Reader::from(Lexer::from("#f "));
+    let mut iter = reader.iter();
+
+    let c = iter.next().unwrap(); // not None
+    let c = c.unwrap(); // not Err
+
+    assert_eq!(c, Datum::Boolean(false.into()));
+}
+
+#[test]
+fn boolean_false_eoi() {
     let reader = Reader::from(Lexer::from("#f"));
     let mut iter = reader.iter();
 

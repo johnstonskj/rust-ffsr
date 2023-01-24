@@ -3,7 +3,7 @@ use pretty_assertions::assert_eq;
 use std::borrow::Cow;
 
 #[test]
-fn test_lexer_empty_list() {
+fn empty() {
     let lexer = Lexer::from("(\n)");
     let mut tokens = lexer.tokens();
     assert!(tokens
@@ -20,7 +20,7 @@ fn test_lexer_empty_list() {
 }
 
 #[test]
-fn test_lexer_empty_list_ws() {
+fn empty_with_ws() {
     let lexer = Lexer::from("  ( \r\n )\r\t");
     let mut tokens = lexer.tokens();
 

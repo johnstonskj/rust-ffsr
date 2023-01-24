@@ -87,7 +87,7 @@ fn test_lexer_random_identifier() {
 }
 
 #[test]
-fn test_lexer_long_identifier() {
+fn long_identifier() {
     let lexer = Lexer::from("the-word-recursion-has-many-meanings");
     let mut tokens = lexer.tokens();
 
@@ -102,7 +102,7 @@ fn test_lexer_long_identifier() {
 }
 
 #[test]
-fn test_lexer_greek_identifier() {
+fn greek_identifier() {
     let lexer = Lexer::from("λ");
     let mut tokens = lexer.tokens();
 

@@ -16,6 +16,8 @@ use crate::{
 };
 use std::collections::HashMap;
 
+use super::ReadContext;
+
 // ------------------------------------------------------------------------------------------------
 // Public Macros
 // ------------------------------------------------------------------------------------------------
@@ -27,17 +29,18 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub(crate) struct IteratorState {
     state: State,
+    context: ReadContext,
     ref_table: HashMap<u16, Datum>,
-    //content: Vec<Datum>,
+    content: Option<Vec<Datum>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub(crate) enum State {
-    Nothing,
+    TopLevel,
     DatumComment,
     DatumAssign(u16),
-    // List,
-    // Vector,
+    List,
+    Vector,
     // ByteVector,
 }
 
@@ -55,28 +58,57 @@ pub(crate) enum State {
 
 impl Default for IteratorState {
     fn default() -> Self {
-        Self {
-            state: State::Nothing,
-            ref_table: Default::default(),
-            //content: Default::default(),
-        }
+        Self::new(State::TopLevel)
     }
 }
 
 impl From<State> for IteratorState {
     fn from(v: State) -> Self {
-        Self {
-            state: v,
-            ref_table: Default::default(),
-            //content: Default::default(),
-        }
+        Self::new(v)
     }
 }
 
 impl IteratorState {
     #[inline(always)]
+    pub(crate) fn new(state: State) -> Self {
+        Self {
+            state,
+            context: ReadContext::TopLevel,
+            ref_table: Default::default(),
+            content: Default::default(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn with_context(self, context: ReadContext) -> Self {
+        match context {
+            ReadContext::TopLevel => Self { context, ..self },
+            ReadContext::InList => Self {
+                context,
+                content: Some(Vec::default()),
+                ..self
+            },
+            ReadContext::InVector => Self {
+                context,
+                content: Some(Vec::default()),
+                ..self
+            },
+            ReadContext::InByteVector => Self {
+                context,
+                content: Some(Vec::default()),
+                ..self
+            },
+        }
+    }
+
+    #[inline(always)]
     pub(crate) fn state(&self) -> State {
         self.state
+    }
+
+    #[inline(always)]
+    pub(crate) fn context(&self) -> ReadContext {
+        self.context
     }
 
     #[inline(always)]
@@ -97,20 +129,32 @@ impl IteratorState {
             .ok_or_else(|| invalid_datum_label(span))
     }
 
-    // #[inline(always)]
-    // pub(crate) fn push_content(&mut self, datum: Datum) {
-    //     self.content.push(datum)
-    // }
+    #[inline(always)]
+    pub(crate) fn add_content(&mut self, datum: Datum) {
+        if let Some(content) = self.content.as_mut() {
+            content.push(datum);
+        } else {
+            panic!();
+        }
+    }
+
+    // [inline(always)]
+    // ub(crate) fn content(&self) -> impl Iterator<Item = &Datum> {
+    //    if let Some(content) = &self.content {
+    //        content.iter()
+    //    } else {
+    //        panic!();
+    //    }
     //
-    // #[inline(always)]
-    // pub(crate) fn content(&self) -> impl Iterator<Item = &Datum> {
-    //     self.content.iter()
-    // }
-    //
-    // #[inline(always)]
-    // pub(crate) fn into_content(self) -> Vec<Datum> {
-    //     self.content
-    // }
+
+    #[inline(always)]
+    pub(crate) fn into_content(self) -> Vec<Datum> {
+        if let Some(content) = self.content {
+            content
+        } else {
+            panic!();
+        }
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
