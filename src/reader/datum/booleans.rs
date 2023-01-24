@@ -114,7 +114,7 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn test_scheme_boolean_true() {
+    fn from_str_true() {
         let test_str = "#t";
         let s = SBoolean::from_str(test_str);
         assert!(s.is_ok());
@@ -122,7 +122,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheme_boolean_false() {
+    fn from_str_false() {
         let test_str = "#f";
         let s = SBoolean::from_str(test_str);
         assert!(s.is_ok());

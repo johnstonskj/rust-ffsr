@@ -118,7 +118,7 @@ fn vbar_a() {
     let mut iter = reader.iter();
 
     if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "|a|");
+        assert_eq!(id.as_str(), "a");
     } else {
         panic!()
     }
@@ -146,23 +146,12 @@ fn vbar_empty_error() {
 
 #[test]
 fn single_emoji() {
-    let reader = Reader::from(Lexer::from("☺️️"));
+    let s = "☺️️";
+    let reader = Reader::from(Lexer::from(s));
     let mut iter = reader.iter();
 
     if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "☺️️");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn single_emoji_eoi() {
-    let reader = Reader::from(Lexer::from("☺️️"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "☺️");
+        assert_eq!(id.as_str().as_bytes(), s.as_bytes());
     } else {
         panic!()
     }

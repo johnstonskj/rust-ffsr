@@ -231,7 +231,7 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn test_scheme_string_from_str_hex() {
+    fn from_str_with_hex_escape() {
         let test_str = "\\x03B1; is named GREEK SMALL LETTER ALPHA.";
         let s = SString::from_str(test_str);
         assert!(s.is_ok());
@@ -239,7 +239,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheme_string_from_str_newline() {
+    fn from_str_with_newline() {
         let test_str = r#"Here’s text \
        containing just one line"#;
         let s = SString::from_str(test_str);
@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheme_string_from_str_quote() {
+    fn from_str_with_quote() {
         let test_str = "The word \"recursion\" has many meanings.";
         let s = SString::from_str(test_str);
         assert!(s.is_ok());

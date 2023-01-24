@@ -412,7 +412,7 @@ mod tests {
     use std::str::FromStr;
 
     #[test]
-    fn test_scheme_char_ascii_escape() {
+    fn from_str_with_ascii_escape() {
         let test_str = "\u{00} a \u{07} b \u{08} r \r n \n t \t \" \\ |";
         let s = SString::from_str(test_str);
         assert!(s.is_ok());
@@ -424,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn test_scheme_char_unicode_escape() {
+    fn from_str_with_unicode_escape() {
         let test_str = "γϛ";
         let s = SString::from_str(test_str);
         assert!(s.is_ok());
