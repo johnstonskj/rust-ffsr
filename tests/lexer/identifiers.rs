@@ -1,114 +1,38 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn test_lexer_simplest_identifier() {
-    let lexer = Lexer::from("a");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("a"));
+success_case!(single_letter_a, "a" => identifier);
+success_case!(single_sign_plus, "+" => identifier);
+success_case!(single_sign_divide, "÷" => identifier);
+success_case!(three_dots, "..." => identifier);
+success_case!(plus_soup_plus, "+soup+" => identifier);
+success_case!(into_string, "->string" => identifier);
+success_case!(arrow_into_string, "→string" => identifier);
+success_case!(less_than_or_equal, "<=?" => identifier);
+success_case!(
+    kebab_case,
+    "the-word-recursion-has-many-meanings" => identifier
+);
+success_case!(
+    shouty_kebab_case,
+    "THE-WORD-RECURSION-HAS-MANY-MEANINGS" => identifier
+);
+success_case!(
+    snake_case,
+    "the_word_recursion_has_many_meanings" => identifier
+);
+success_case!(camel_case, "theWordRecursionHasManyMeanings" => identifier);
+success_case!(pascal_case, "TheWordRecursionHasManyMeanings" => identifier);
 
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-#[test]
-fn test_lexer_plus_as_identifier() {
-    let lexer = Lexer::from("+");
-    let mut tokens = lexer.tokens();
+success_case!(three_in_a_row, "a b c" => (identifier, "a"), (identifier, "b"), (identifier, "c"));
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("+"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn test_lexer_three_dots_identifier() {
-    let lexer = Lexer::from("...");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("..."));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn test_lexer_soup_identifier() {
-    let lexer = Lexer::from("+soup+");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("+soup+"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn test_lexer_to_string_identifier() {
-    let lexer = Lexer::from("->string");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("->string"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn test_lexer_is_lte_identifier() {
-    let lexer = Lexer::from("<=?");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("<=?"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn test_lexer_random_identifier() {
-    let lexer = Lexer::from("a34kTMNs");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("a34kTMNs"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn long_identifier() {
-    let lexer = Lexer::from("the-word-recursion-has-many-meanings");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(
-        lexer.token_str(&token),
-        Cow::Borrowed("the-word-recursion-has-many-meanings")
-    );
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn greek_identifier() {
-    let lexer = Lexer::from("λ");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_identifier());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("λ"));
-
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------

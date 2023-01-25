@@ -114,10 +114,8 @@ pub use identifiers::SIdentifier;
 mod lists;
 pub use lists::SList;
 
-mod numbers;
-pub use numbers::{
-    SByte, SComplex, SExactComplex, SFloat, SInteger, SLong, SLongRational, SNumber, SRational,
-};
+pub mod numbers;
+pub use numbers::{Complexnum, ExactComplexnum, Fixnum, Flonum, Ratnum, SNumber};
 
 mod strings;
 pub use strings::SString;

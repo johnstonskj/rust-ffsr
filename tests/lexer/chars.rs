@@ -1,39 +1,21 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn single_a() {
-    let lexer = Lexer::from("#\\a");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_character());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#\\a"));
+success_case!(single_a, "#\\a" => character);
+success_case!(named_space, "#\\space" => character);
+success_case!(hex_escape, "#\\x00fb;" => character);
+success_case!(space, "#\\ " => character);
 
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-#[test]
-fn named() {
-    let lexer = Lexer::from("#\\space");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_character());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#\\space"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn escaped_unicode() {
-    let lexer = Lexer::from("#\\x00fb;");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_character());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#\\x00fb;"));
-
-    assert!(tokens.next().is_none());
-}
+failure_case!(incomplete, "#\\");
+failure_case!(incomplete_hex_escape, "#\\x00fb");

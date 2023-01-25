@@ -36,6 +36,7 @@ pub(crate) enum State {
     Nothing,
     InWhitespace,
     InDirective,
+    InDirectiveText,
     InIdentifier,
     InVBarIdentifier,
     InVBarIdentifierEscape,

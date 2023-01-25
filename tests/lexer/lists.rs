@@ -1,36 +1,16 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn empty() {
-    let lexer = Lexer::from("(\n)");
-    let mut tokens = lexer.tokens();
-    assert!(tokens
-        .next()
-        .unwrap()
-        .expect("tokenizer failed")
-        .is_open_parenthesis());
-    assert!(tokens
-        .next()
-        .unwrap()
-        .expect("tokenizer failed")
-        .is_close_parenthesis());
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-#[test]
-fn empty_with_ws() {
-    let lexer = Lexer::from("  ( \r\n )\r\t");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_open_parenthesis());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("("));
+success_case!(empty, "()" => (open_parenthesis, "("), (close_parenthesis, ")"));
+success_case!(empty_with_inner_whitespace, "(\t\n)" => (open_parenthesis, "("), (close_parenthesis, ")"));
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_close_parenthesis());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed(")"));
-
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------

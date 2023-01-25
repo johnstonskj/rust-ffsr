@@ -1,17 +1,21 @@
-use ffsr::lexer::Lexer;
-use ffsr::Sourced;
+use paste::paste;
 
-#[test]
-fn incomplete_special() {
-    let lexer = Lexer::from("# ()");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let error = tokens.next().unwrap();
-    assert!(error.is_err());
-    let error = error.err().unwrap();
-    assert_eq!(
-        error.to_string(),
-        format!("Token 'special' not closed, span: 0..1")
-    );
-    error.print(lexer.source_str());
-}
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
+
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------
+
+failure_case!(
+    incomplete_special,
+    "# ()",
+    "Token 'special' not closed, span: 0..1"
+);
+
+failure_case!(unkown_special, "#*");

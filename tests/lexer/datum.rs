@@ -1,33 +1,17 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn comment() {
-    let lexer = Lexer::from("#;");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_datum_comment());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#;"));
-}
+success_case!(comment, "#;" => datum_comment);
+success_case!(assignment, "#21=" => datum_assignment);
+success_case!(reference, "#32#" => datum_reference);
 
-#[test]
-fn assignment() {
-    let lexer = Lexer::from("#21=");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_datum_assignment());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#21="));
-}
-
-#[test]
-fn reference() {
-    let lexer = Lexer::from("#21#");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_datum_reference());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#21#"));
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------

@@ -10,8 +10,9 @@ YYYYY
 */
 
 use crate::error::{
-    invalid_byte_vector_prefix, invalid_char_input, invalid_datum_label, invalid_escape_string,
-    invalid_identifier_input, unclosed_block_comment, unclosed_special, unclosed_string, Error,
+    invalid_byte_vector_prefix, invalid_char_input, invalid_datum_label, invalid_directive_input,
+    invalid_escape_string, invalid_identifier_input, unclosed_block_comment, unclosed_special,
+    unclosed_string, Error,
 };
 use crate::input::indices::CharIndex;
 use crate::input::iter::CharIndices;
@@ -104,7 +105,8 @@ macro_rules! state_change {
     };
     ($current_state:expr => $state:expr) => {
         println!(
-            "lexer state {:?} => {:?}",
+            "lexer state [{:03}] {:?} => {:?}",
+            line!(),
             $current_state.state(),
             $state
         );
@@ -123,7 +125,7 @@ macro_rules! return_token_and_add_char {
             $current_state.token_starts_at(),
             $char_index,
         )));
-        println!("lexer token {:?}", token);
+        println!("lexer token [{:03}] {token:?}", line!());
         return token;
     };
 }
@@ -139,7 +141,7 @@ macro_rules! return_token {
             $current_state.token_starts_at(),
             $char_index,
         )));
-        println!("lexer token {:?}", token);
+        println!("lexer token [{:03}] {token:?}", line!());
         return token;
     };
 }
@@ -151,7 +153,7 @@ macro_rules! return_error {
             $current_state.token_starts_at().character(),
             $char_index.index().character(),
         ))));
-        eprintln!("lexer error {:?}", err);
+        eprintln!("lexer error [{:03}] {err:?}", line!());
         return err;
     };
     ($current_state:expr, $char_index:expr, $error_fn:ident) => {
@@ -186,7 +188,7 @@ impl Iterator for TokenIter<'_> {
         let mut current_state = IteratorState::default();
         let mut last_char_index = CharIndex::new(0, 0, '\u{00}');
         while let Some(char_index) = self.next_char() {
-            //println!("lexer::match ({:?}, {:?})", current_state, char_index);
+            println!("lexer match ({:?}, {:?})", current_state, char_index);
             last_char_index = char_index;
             match (current_state.state(), char_index.character()) {
                 // --------------------------------------------------------------------------------
@@ -255,6 +257,10 @@ impl Iterator for TokenIter<'_> {
                 }
                 (State::InPeculiarIdentifier, c) if is_identifier_subsequent(c) => {}
                 (State::InPeculiarIdentifier, _) => {
+                    self.push_back_char(char_index);
+                    return_token!(current_state, char_index, Identifier => Nothing);
+                }
+                (State::InNumberOrIdentifier, _) => {
                     self.push_back_char(char_index);
                     return_token!(current_state, char_index, Identifier => Nothing);
                 }
@@ -428,9 +434,16 @@ impl Iterator for TokenIter<'_> {
                 (State::InSpecial, '!') => {
                     state_change!(current_state => InDirective);
                 }
-                (State::InDirective, c) if is_directive(c) => {}
+                (State::InDirective, c) if is_directive(c) => {
+                    state_change!(current_state => InDirectiveText);
+                }
                 (State::InDirective, _) => {
-                    return_token_and_add_char!(current_state, char_index, Directive => Nothing);
+                    return_error!(current_state, char_index, invalid_directive_input);
+                }
+                (State::InDirectiveText, c) if is_directive(c) => {}
+                (State::InDirectiveText, _) => {
+                    self.push_back_char(char_index);
+                    return_token!(current_state, char_index, Directive => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // Datum references
@@ -470,8 +483,7 @@ impl Iterator for TokenIter<'_> {
                 (State::InSpecial, c) => {
                     // push back?
                     eprintln!(
-                        "Found char {:?} at {:?}, which doesn't belong in a special",
-                        c, char_index
+                        "Found char {c:?} at {char_index:?}, which doesn't belong in a special"
                     );
                     return_error!(current_state, char_index, unclosed_special);
                 }
@@ -490,7 +502,7 @@ impl Iterator for TokenIter<'_> {
 
         match current_state.state() {
             // ***** Safe Cases *****
-            State::InDirective => {
+            State::InDirectiveText => {
                 return_token!(current_state, last_char_index, Directive);
             }
             State::InIdentifier | State::InPeculiarIdentifier | State::InNumberOrIdentifier => {
@@ -511,6 +523,9 @@ impl Iterator for TokenIter<'_> {
             }
             State::InSpecial => {
                 return_error!(current_state, last_char_index, unclosed_special);
+            }
+            State::InDirective => {
+                return_error!(current_state, last_char_index, invalid_directive_input);
             }
             State::InString => {
                 return_error!(current_state, last_char_index, unclosed_string);

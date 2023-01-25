@@ -1,23 +1,18 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn tbooleans() {
-    let lexer = Lexer::from("#t #f#t");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#t"));
+success_case!(true_literal, "#t" => boolean);
+success_case!(false_literal, "#f" => boolean);
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#f"));
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_boolean());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#t"));
+success_case!(three_booleans, "#f #t#f" => (boolean, "#f"), (boolean, "#t"), (boolean, "#f"));
 
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------

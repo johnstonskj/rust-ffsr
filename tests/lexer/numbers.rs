@@ -1,115 +1,27 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn single_one() {
-    let lexer = Lexer::from(" 1 ");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("1"));
+success_case!(single_one, "1" => numeric);
+success_case!(integer, "123" => numeric);
+success_case!(exact_integer, "#e123" => numeric);
+success_case!(inexact_integer, "#i123" => numeric);
+success_case!(binary_integer, "#b1111011" => numeric);
+success_case!(binary_exact_integer, "#b#e1111011" => numeric);
+success_case!(binary_inexact_integer, "#b#i1111011" => numeric);
+success_case!(octal_integer, "#o173" => numeric);
+success_case!(octal_exact_integer, "#o#e173" => numeric);
+success_case!(octal_inexact_integer, "#o#i173" => numeric);
+success_case!(hex_integer, "#x7b" => numeric);
+success_case!(hex_exact_integer, "#x#e7b" => numeric);
+success_case!(hex_inexact_integer, "#x#i7b" => numeric);
 
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-#[test]
-fn single_one_eoi() {
-    let lexer = Lexer::from("1");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("1"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn integer() {
-    let lexer = Lexer::from(" 101 ");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("101"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn integer_eoi() {
-    let lexer = Lexer::from("101");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("101"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn exact_integer() {
-    let lexer = Lexer::from(" #e101 ");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric_exactness_prefix());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#e"));
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("101"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn exact_integer_eoi() {
-    let lexer = Lexer::from("#e101");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric_exactness_prefix());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#e"));
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("101"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn binary_integer() {
-    let lexer = Lexer::from(" #b101 ");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric_radix_prefix());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#b"));
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("101"));
-
-    assert!(tokens.next().is_none());
-}
-
-#[test]
-fn binary_integer_eoi() {
-    let lexer = Lexer::from("#b101");
-    let mut tokens = lexer.tokens();
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric_radix_prefix());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#b"));
-
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_numeric());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("101"));
-
-    assert!(tokens.next().is_none());
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------

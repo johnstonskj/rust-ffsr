@@ -1,13 +1,18 @@
-use ffsr::lexer::Lexer;
-use pretty_assertions::assert_eq;
-use std::borrow::Cow;
+use paste::paste;
 
-#[test]
-fn fold_case() {
-    let lexer = Lexer::from("#!fold-case");
-    let mut tokens = lexer.tokens();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let token = tokens.next().unwrap().expect("tokenizer failed");
-    assert!(token.is_directive());
-    assert_eq!(lexer.token_str(&token), Cow::Borrowed("#!fold-case"));
-}
+success_case!(fold_case, "#!fold-case" => directive);
+
+// ------------------------------------------------------------------------------------------------
+// Multi-valued success cases
+// ------------------------------------------------------------------------------------------------
+
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------
+
+failure_case!(incomplete, "#!");
+failure_case!(incomplete_with_whitespace, " #! ");

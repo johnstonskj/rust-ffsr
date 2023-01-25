@@ -1,5 +1,5 @@
 use ffsr::lexer::Lexer;
-use ffsr::reader::datum::{Datum, SInteger, SNumber};
+use ffsr::reader::datum::{Datum, Fixnum, SNumber};
 use ffsr::reader::Reader;
 use pretty_assertions::assert_eq;
 
@@ -11,7 +11,7 @@ fn single_one() {
     let c = iter.next().unwrap(); // not None
     let c = c.unwrap(); // not Err
 
-    assert_eq!(c, Datum::Number(SNumber::Integer(SInteger::from(1))));
+    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(1))));
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn single_one_eoi() {
     let c = iter.next().unwrap(); // not None
     let c = c.unwrap(); // not Err
 
-    assert_eq!(c, Datum::Number(SNumber::Integer(SInteger::from(1))));
+    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(1))));
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn integer() {
     let c = iter.next().unwrap(); // not None
     let c = c.unwrap(); // not Err
 
-    assert_eq!(c, Datum::Number(SNumber::Integer(SInteger::from(101))));
+    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(101))));
 }
 
 #[test]
@@ -44,5 +44,5 @@ fn integer_eoi() {
     let c = iter.next().unwrap(); // not None
     let c = c.unwrap(); // not Err
 
-    assert_eq!(c, Datum::Number(SNumber::Integer(SInteger::from(101))));
+    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(101))));
 }

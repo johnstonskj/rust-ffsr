@@ -40,11 +40,36 @@ pub struct SString(String);
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum StringParseState {
+enum ParseState {
     Normal,
     InEscape,
     InHexEscape,
     InWhitespaceEol,
+}
+
+macro_rules! change_state {
+    ($current:expr => $state:ident) => {
+        println!(
+            "datum [{}] string state {:?} => {:?}",
+            line!(),
+            $current,
+            ParseState::$state,
+        );
+        $current = ParseState::$state;
+    };
+}
+
+macro_rules! save {
+    ($character:expr => $buffer:expr) => {
+        println!("datum [{}] string push {:?}", line!(), $character);
+        $buffer.push($character);
+    };
+}
+macro_rules! save_and_change_state {
+    ($buffer:expr, $character:expr, $current:expr => $state:ident) => {
+        save!($character => $buffer);
+        change_state!($current => $state);
+    };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -101,70 +126,59 @@ impl SimpleDatumValue for SString {
             s
         };
         let mut buffer = String::with_capacity(s.len());
-        let mut state = StringParseState::Normal;
+        let mut current_state = ParseState::Normal;
         let mut mark: usize = 0;
         for (i, c) in s.char_indices() {
-            match (state, c) {
-                (StringParseState::Normal, '\\') => {
-                    println!("entering escape");
-                    state = StringParseState::InEscape;
+            match (current_state, c) {
+                (ParseState::Normal, '\\') => {
+                    change_state!(current_state => InEscape);
                 }
-                (StringParseState::InEscape, 'a') => {
-                    buffer.push('\u{07}');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, 'a') => {
+                    save_and_change_state!(buffer, '\u{07}', current_state => Normal);
                 }
-                (StringParseState::InEscape, 'b') => {
-                    buffer.push('\u{08}');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, 'b') => {
+                    save_and_change_state!(buffer, '\u{08}', current_state => Normal);
                 }
-                (StringParseState::InEscape, 't') => {
-                    buffer.push('\t');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, 't') => {
+                    save_and_change_state!(buffer, '\t', current_state => Normal);
                 }
-                (StringParseState::InEscape, 'n') => {
-                    buffer.push('\n');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, 'n') => {
+                    save_and_change_state!(buffer, '\n', current_state => Normal);
                 }
-                (StringParseState::InEscape, 'r') => {
-                    buffer.push('\r');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, 'r') => {
+                    save_and_change_state!(buffer, '\r', current_state => Normal);
                 }
-                (StringParseState::InEscape, '"') => {
-                    buffer.push('"');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, '"') => {
+                    save_and_change_state!(buffer, c, current_state => Normal);
                 }
-                (StringParseState::InEscape, '\\') => {
-                    buffer.push('\\');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, '\\') => {
+                    save_and_change_state!(buffer, c, current_state => Normal);
                 }
-                (StringParseState::InEscape, '|') => {
-                    buffer.push('|');
-                    state = StringParseState::Normal;
+                (ParseState::InEscape, '|') => {
+                    save_and_change_state!(buffer, c, current_state => Normal);
                 }
-                (StringParseState::InEscape, 'x') => {
+                (ParseState::InEscape, 'x') => {
                     mark = i;
-                    state = StringParseState::InHexEscape;
+                    change_state!(current_state => InHexEscape);
                 }
-                (StringParseState::InEscape, ' ' | '\t' | '\r' | '\n') => {
-                    state = StringParseState::InWhitespaceEol;
+                (ParseState::InEscape, ' ' | '\t' | '\r' | '\n') => {
+                    change_state!(current_state => InWhitespaceEol);
                 }
-                (StringParseState::InHexEscape, c) if c.is_ascii_hexdigit() => {}
-                (StringParseState::InHexEscape, ';') => {
+                (ParseState::InHexEscape, c) if c.is_ascii_hexdigit() => {}
+                (ParseState::InHexEscape, ';') => {
                     let hex_str = &s[mark + 1..i];
                     let hex_val = u32::from_str_radix(hex_str, 16)
                         .map_err(|_| invalid_unicode_value(span))?;
                     // TODO: use SChar::is_valid ?
-                    buffer
-                        .push(char::from_u32(hex_val).ok_or_else(|| invalid_unicode_value(span))?);
-                    state = StringParseState::Normal;
+                    let c = char::from_u32(hex_val).ok_or_else(|| invalid_unicode_value(span))?;
+                    save_and_change_state!(buffer, c, current_state => Normal);
                 }
-                (StringParseState::InWhitespaceEol, ' ' | '\t' | '\r' | '\n') => {}
-                (StringParseState::InWhitespaceEol, c) => {
-                    buffer.push(c);
-                    state = StringParseState::Normal;
+                (ParseState::InWhitespaceEol, ' ' | '\t' | '\r' | '\n') => {}
+                (ParseState::InWhitespaceEol, c) => {
+                    save_and_change_state!(buffer, c, current_state => Normal);
                 }
-                (StringParseState::Normal, c) => {
-                    buffer.push(c);
+                (ParseState::Normal, c) => {
+                    save!(c => buffer);
                 }
                 _ => {
                     return Err(invalid_string_input(span));

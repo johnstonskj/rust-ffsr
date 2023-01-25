@@ -41,7 +41,7 @@ pub struct SIdentifier(String);
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum IdentifierParseState {
+enum ParseState {
     Start,
     InNumber,
     InEscape,
@@ -57,9 +57,9 @@ macro_rules! change_state {
             "datum [{}] ident state {:?} => {:?}",
             line!(),
             $current,
-            IdentifierParseState::$state,
+            ParseState::$state,
         );
-        $current = IdentifierParseState::$state;
+        $current = ParseState::$state;
     };
 }
 
@@ -151,98 +151,95 @@ impl SimpleDatumValue for SIdentifier {
 
         let mut requires_escape = false;
         let mut buffer = String::with_capacity(s.len());
-        let mut current_state = IdentifierParseState::Start;
+        let mut current_state = ParseState::Start;
         let mut mark: usize = 0;
 
         for (i, c) in s.char_indices() {
             println!("datum ident ({i}, {c:?}) requires escape: {requires_escape}");
 
             match (current_state, c) {
-                (IdentifierParseState::Start, '+' | '-') => {
+                (ParseState::Start, '+' | '-') => {
                     save_and_change_state!(buffer, c, current_state => InPeculiar);
                 }
-                (IdentifierParseState::Start, '.') => {
+                (ParseState::Start, '.') => {
                     save_and_change_state!(buffer, c, current_state => InDotPeculiar);
                 }
-                (
-                    IdentifierParseState::Start
-                    | IdentifierParseState::InPeculiar
-                    | IdentifierParseState::InDotPeculiar,
-                    c,
-                ) if c.is_ascii_digit() => {
+                (ParseState::Start | ParseState::InPeculiar | ParseState::InDotPeculiar, c)
+                    if c.is_ascii_digit() =>
+                {
                     save_and_change_state!(buffer, c, current_state => InNumber);
                 }
-                (IdentifierParseState::InNumber, c) if c.is_ascii_digit() => {
+                (ParseState::InNumber, c) if c.is_ascii_digit() => {
                     save!(c => buffer);
                 }
-                (IdentifierParseState::InNumber, c) => {
+                (ParseState::InNumber, c) => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::Start, c) if is_identifier_initial(c) => {
+                (ParseState::Start, c) if is_identifier_initial(c) => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InPeculiar, '.') => {
+                (ParseState::InPeculiar, '.') => {
                     save_and_change_state!(buffer, c, current_state => InDotPeculiar);
                 }
-                (IdentifierParseState::InPeculiar, c) if is_sign_subsequent(c) => {
+                (ParseState::InPeculiar, c) if is_sign_subsequent(c) => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InDotPeculiar, c) if is_dot_subsequent(c) => {
+                (ParseState::InDotPeculiar, c) if is_dot_subsequent(c) => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InRest, c) if is_identifier_subsequent(c) => {
+                (ParseState::InRest, c) if is_identifier_subsequent(c) => {
                     save!(c => buffer);
                 }
-                (IdentifierParseState::Start | IdentifierParseState::InRest, c)
+                (ParseState::Start | ParseState::InRest, c)
                     if c.is_separator() || c.is_control() =>
                 {
                     requires_escape = true;
                     save!(c => buffer);
                 }
-                (IdentifierParseState::Start | IdentifierParseState::InRest, c)
+                (ParseState::Start | ParseState::InRest, c)
                     if ['(', ')', '[', ']', '{', '}', '"', ',', '\'', '`', ';', '#']
                         .contains(&c) =>
                 {
                     requires_escape = true;
                     save!(c => buffer);
                 }
-                (IdentifierParseState::Start | IdentifierParseState::InRest, '\\') => {
+                (ParseState::Start | ParseState::InRest, '\\') => {
                     requires_escape = true;
                     change_state!(current_state => InEscape);
                 }
-                (IdentifierParseState::InEscape, 'a') => {
+                (ParseState::InEscape, 'a') => {
                     save_and_change_state!(buffer, '\u{07}', current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, 'b') => {
+                (ParseState::InEscape, 'b') => {
                     save_and_change_state!(buffer, '\u{08}', current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, 't') => {
+                (ParseState::InEscape, 't') => {
                     save_and_change_state!(buffer, '\t', current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, 'n') => {
+                (ParseState::InEscape, 'n') => {
                     save_and_change_state!(buffer, '\n', current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, 'r') => {
+                (ParseState::InEscape, 'r') => {
                     save_and_change_state!(buffer, '\r', current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, '"') => {
+                (ParseState::InEscape, '"') => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, '\\') => {
+                (ParseState::InEscape, '\\') => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, '|') => {
+                (ParseState::InEscape, '|') => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InEscape, 'x') => {
+                (ParseState::InEscape, 'x') => {
                     mark = i;
                     change_state!(current_state => InHexEscape);
                 }
-                (IdentifierParseState::InEscape, ' ' | '\t' | '\r' | '\n') => {
+                (ParseState::InEscape, ' ' | '\t' | '\r' | '\n') => {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
-                (IdentifierParseState::InHexEscape, c) if c.is_ascii_hexdigit() => {}
-                (IdentifierParseState::InHexEscape, ';') => {
+                (ParseState::InHexEscape, c) if c.is_ascii_hexdigit() => {}
+                (ParseState::InHexEscape, ';') => {
                     let hex_str = &s[mark + 1..i];
                     let hex_val = u32::from_str_radix(hex_str, 16)
                         .map_err(|_| invalid_unicode_value(span))?;
@@ -257,11 +254,10 @@ impl SimpleDatumValue for SIdentifier {
                 }
             }
         }
-        if current_state == IdentifierParseState::InNumber {
+        if current_state == ParseState::InNumber {
             eprintln!("identifier cannot be a number");
             Err(invalid_identifier_input(span))
-        } else if current_state == IdentifierParseState::InEscape
-            || current_state == IdentifierParseState::InHexEscape
+        } else if current_state == ParseState::InEscape || current_state == ParseState::InHexEscape
         {
             eprintln!("incomplete escape sequence, in {current_state:?}");
             Err(invalid_escape_string(span))

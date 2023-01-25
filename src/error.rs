@@ -61,6 +61,9 @@ pub enum Error {
     InvalidIdentifierInput {
         span: Span,
     },
+    InvalidDirectiveInput {
+        span: Span,
+    },
     InvalidDatumLabel {
         span: Span,
     },
@@ -172,6 +175,12 @@ pub fn invalid_identifier_input(span: Span) -> Error {
     Error::InvalidIdentifierInput { span }
 }
 
+/// Construct an `InvalidDirectiveInput` Error with the provided span.
+#[inline]
+pub fn invalid_directive_input(span: Span) -> Error {
+    Error::InvalidDirectiveInput { span }
+}
+
 /// Construct an `InvalidDatumLabel` Error with the provided span.
 #[inline]
 pub fn invalid_datum_label(span: Span) -> Error {
@@ -252,6 +261,10 @@ impl Display for Error {
                     "Invalid, or badly formed, identifier input; span: {:?}",
                     span.as_range()
                 ),
+                Self::InvalidDirectiveInput { span } => format!(
+                    "Invalid, or badly formed, directive input; span: {:?}",
+                    span.as_range()
+                ),
                 Self::InvalidDatumLabel { span } => format!(
                     "Invalid, or badly formed, datum label assignment or reference; span: {:?}",
                     span.as_range()
@@ -312,7 +325,8 @@ impl Error {
             Self::InvalidStringInput { span: _ } => 27,
             Self::InvalidNumericInput { span: _ } => 28,
             Self::InvalidIdentifierInput { span: _ } => 29,
-            Self::InvalidDatumLabel { span: _ } => 30,
+            Self::InvalidDirectiveInput { span: _ } => 30,
+            Self::InvalidDatumLabel { span: _ } => 31,
             // Reader errors
             Self::DuplicateDatumLabel { label: _, span: _ } => 41,
             Self::UnknownDatumLabel { label: _, span: _ } => 42,
@@ -475,6 +489,16 @@ impl Error {
                     .with_label(
                         Label::new(span.as_range())
                             .with_message("Not a valid identifier"),
+                    )
+                    .finish(),
+            ),
+            Self::InvalidDirectiveInput { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Invalid, or badly formed, directive input")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("Not a valid directive"),
                     )
                     .finish(),
             ),

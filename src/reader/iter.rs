@@ -63,15 +63,19 @@ impl<'a> From<TokenIter<'a>> for DatumIter<'a> {
 macro_rules! atomic_datum {
     ($me:expr, $current_state:expr, $datum:expr) => {
         if $current_state.state() == State::List || $current_state.state() == State::Vector {
-            println!("reader adding {:?} to open list", $datum);
+            println!("reader adding [{:03}] {:?} to open list", line!(), $datum);
             $current_state.add_content($datum.clone().into());
         } else {
             if let State::DatumAssign(label) = $current_state.state() {
-                println!("reading assigning {:?} to label {:?}", $datum, label);
+                println!(
+                    "reader [{:03}] assigning {:?} to label {label:?}",
+                    line!(),
+                    $datum
+                );
                 $current_state = $me.state_stack.pop().unwrap();
                 $current_state.insert_labeled(label, $datum.clone().into());
             }
-            println!("reader datum {:?}", $datum);
+            println!("reader datum [{:03}] {:?}", line!(), $datum);
             return Some(Ok($datum.into()));
         }
     };
@@ -85,7 +89,7 @@ macro_rules! atomic_datum_from_str {
                 atomic_datum!($me, $current_state, datum);
             }
             Err(e) => {
-                println!("reader error {:?}", e);
+                println!("reader error [{:03}] {e:?}", line!());
                 return Some(Err(e));
             }
         }
@@ -105,7 +109,7 @@ impl Iterator for DatumIter<'_> {
                 }
             };
 
-            println!("reader match ({:?}, {:?})", current_state, token);
+            println!("reader match ({current_state:?}, {token:?})");
 
             match (current_state.state(), token.kind()) {
                 (_, TokenKind::Identifier) => {
@@ -158,10 +162,7 @@ impl Iterator for DatumIter<'_> {
                     current_state = State::DatumComment.into();
                 }
                 (State::DatumComment, k) if is_datum(k) && !self.return_comments => {
-                    println!(
-                        "reader dropping token {:?}; you said it was commented out",
-                        token
-                    );
+                    println!("reader dropping token {token:?}; you said it was commented out");
                     current_state = self.state_stack.pop().unwrap();
                 }
                 (_, TokenKind::DatumAssign) => {
@@ -181,7 +182,7 @@ impl Iterator for DatumIter<'_> {
                     return Some(current_state.get_labeled(label, token.span()));
                 }
                 (s, kind) => {
-                    eprintln!("reader not expecting {:?} in state {:?}", kind, s);
+                    eprintln!("reader not expecting {kind:?} in state {s:?}");
                     return Some(Err(unexpected_token(
                         kind,
                         current_state.context(),
