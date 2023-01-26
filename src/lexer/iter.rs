@@ -19,6 +19,7 @@ use crate::input::iter::CharIndices;
 use crate::lexer::internals::{IteratorState, State};
 use crate::lexer::token::{Span, Token, TokenKind};
 use crate::Sourced;
+use tracing::{error, trace, trace_span};
 use unicode_categories::UnicodeCategories;
 
 // ------------------------------------------------------------------------------------------------
@@ -104,9 +105,8 @@ macro_rules! state_change {
         state_change!($current_state => State::$state);
     };
     ($current_state:expr => $state:expr) => {
-        println!(
-            "lexer state [{:03}] {:?} => {:?}",
-            line!(),
+        trace!(
+            "state change {:?} => {:?}",
             $current_state.state(),
             $state
         );
@@ -125,7 +125,7 @@ macro_rules! return_token_and_add_char {
             $current_state.token_starts_at(),
             $char_index,
         )));
-        println!("lexer token [{:03}] {token:?}", line!());
+        trace!("return token {token:?}");
         return token;
     };
 }
@@ -141,7 +141,7 @@ macro_rules! return_token {
             $current_state.token_starts_at(),
             $char_index,
         )));
-        println!("lexer token [{:03}] {token:?}", line!());
+        trace!("return token {token:?}");
         return token;
     };
 }
@@ -153,7 +153,7 @@ macro_rules! return_error {
             $current_state.token_starts_at().character(),
             $char_index.index().character(),
         ))));
-        eprintln!("lexer error [{:03}] {err:?}", line!());
+        error!("return error {err:?}");
         return err;
     };
     ($current_state:expr, $char_index:expr, $error_fn:ident) => {
@@ -181,15 +181,33 @@ impl Sourced for TokenIter<'_> {
     }
 }
 
+#[inline(always)]
+fn is_radix_char(c: char, radix: u32) -> bool {
+    match (radix, c) {
+        (2, c) if c.is_ascii_digit() && c < '2' => true,
+        (8, c) if c.is_ascii_digit() && c < '8' => true,
+        (10, c) if c.is_ascii_digit() => true,
+        (16, c) if c.is_ascii_hexdigit() => true,
+        _ => false,
+    }
+}
+
 impl Iterator for TokenIter<'_> {
     type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let span = trace_span!("next-token");
+        let _scope = span.enter();
+
         let mut current_state = IteratorState::default();
         let mut last_char_index = CharIndex::new(0, 0, '\u{00}');
+        let mut number_radix: u32 = 10;
+
         while let Some(char_index) = self.next_char() {
-            println!("lexer match ({:?}, {:?})", current_state, char_index);
+            trace!("match ({:?}, {:?})", current_state, char_index);
+
             last_char_index = char_index;
+
             match (current_state.state(), char_index.character()) {
                 // --------------------------------------------------------------------------------
                 // White space handling
@@ -241,7 +259,7 @@ impl Iterator for TokenIter<'_> {
                     state_change_at!(char_index, current_state => InDotNumberOrIdentifier);
                 }
                 (State::InNumberOrIdentifier, c) if c.is_ascii_digit() => {
-                    state_change!(current_state => InNumeric);
+                    state_change!(current_state => InNumber);
                 }
                 (State::InNumberOrIdentifier, '.') => {
                     state_change!(current_state => InDotNumberOrIdentifier);
@@ -250,7 +268,7 @@ impl Iterator for TokenIter<'_> {
                     state_change!(current_state => InPeculiarIdentifier);
                 }
                 (State::InDotNumberOrIdentifier, c) if c.is_ascii_digit() => {
-                    state_change!(current_state => InNumeric);
+                    state_change!(current_state => InNumber);
                 }
                 (State::InDotNumberOrIdentifier, c) if is_dot_subsequent(c) => {
                     state_change!(current_state => InPeculiarIdentifier);
@@ -352,7 +370,7 @@ impl Iterator for TokenIter<'_> {
                 // +inf.0 -inf.0 +nan.0 -nan.0
                 // --------------------------------------------------------------------------------
                 // Start of special forms
-                (State::Nothing | State::InWhitespace, '#') => {
+                (State::Nothing | State::InWhitespace | State::InNumber, '#') => {
                     state_change_at!(char_index, current_state => InSpecial);
                 }
                 // --------------------------------------------------------------------------------
@@ -382,23 +400,47 @@ impl Iterator for TokenIter<'_> {
                 }
                 // --------------------------------------------------------------------------------
                 // Numeric values
-                (State::Nothing | State::InWhitespace, c) if c.is_ascii_digit() => {
-                    state_change_at!(char_index, current_state => State::InNumeric);
+                (State::Nothing | State::InWhitespace, c) if is_radix_char(c, number_radix) => {
+                    state_change_at!(char_index, current_state => InNumber);
                 }
-                (State::InNumeric, c) if c.is_ascii_digit() => {}
-                (State::InNumeric, c) if is_identifier_subsequent(c) => {
+                (State::InNumber, 'e') => {}
+                (State::InNumber, 'i') => {
+                    return_token_and_add_char!(current_state, char_index, Number => Nothing);
+                }
+                (State::InNumber, c) if is_radix_char(c, number_radix) => {}
+                (State::InNumber, c) if is_identifier_subsequent(c) => {
                     state_change!(current_state => InIdentifier);
                 }
-                (State::InNumeric, _) => {
+                (State::InNumber, _) => {
                     self.push_back_char(char_index);
-                    return_token!(current_state, char_index, Numeric => Nothing);
+                    return_token!(current_state, char_index, Number => Nothing);
                 }
-                (State::InSpecial, 'e' | 'i') => {
-                    return_token_and_add_char!(current_state, char_index, NumericExactnessPrefix => Nothing);
+                (State::InSpecial | State::InNumberPrefix, 'e' | 'i') => {
+                    state_change!(current_state => InNumberPrefix);
                 }
-                (State::InSpecial, 'b' | 'o' | 'd' | 'x') => {
-                    return_token_and_add_char!(current_state, char_index, NumericRadixPrefix => Nothing);
+                (State::InSpecial | State::InNumberPrefix, 'b') => {
+                    number_radix = 2;
+                    state_change!(current_state => InNumberPrefix);
                 }
+                (State::InSpecial | State::InNumberPrefix, 'o') => {
+                    number_radix = 8;
+                    state_change!(current_state => InNumberPrefix);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'd') => {
+                    number_radix = 10;
+                    state_change!(current_state => InNumberPrefix);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'x') => {
+                    number_radix = 16;
+                    state_change!(current_state => InNumberPrefix);
+                }
+                (State::InNumberPrefix, c) if is_radix_char(c, number_radix) => {
+                    state_change!(current_state => InNumber);
+                }
+                (State::InNumberPrefix, '+' | '-' | '.') => {
+                    state_change!(current_state => InNumber);
+                }
+                (State::InNumberPrefix, '#') => {}
                 // --------------------------------------------------------------------------------
                 // Character values
                 (State::InSpecial, '\\') => {
@@ -482,9 +524,7 @@ impl Iterator for TokenIter<'_> {
                 // --------------------------------------------------------------------------------
                 (State::InSpecial, c) => {
                     // push back?
-                    eprintln!(
-                        "Found char {c:?} at {char_index:?}, which doesn't belong in a special"
-                    );
+                    error!("Found char {c:?} at {char_index:?}, which doesn't belong in a special");
                     return_error!(current_state, char_index, unclosed_special);
                 }
                 // --------------------------------------------------------------------------------
@@ -508,8 +548,8 @@ impl Iterator for TokenIter<'_> {
             State::InIdentifier | State::InPeculiarIdentifier | State::InNumberOrIdentifier => {
                 return_token!(current_state, last_char_index, Identifier);
             }
-            State::InNumeric => {
-                return_token!(current_state, last_char_index, Numeric);
+            State::InNumber => {
+                return_token!(current_state, last_char_index, Number);
             }
             State::InLineComment => {
                 return_token!(current_state, last_char_index, LineComment);

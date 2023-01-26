@@ -14,12 +14,12 @@ use crate::lexer::iter::{
     is_dot_subsequent, is_identifier_initial, is_identifier_subsequent, is_sign_subsequent,
 };
 use crate::lexer::token::Span;
+use crate::reader::datum::SChar;
 use crate::reader::datum::{Datum, DatumValue, SString, SimpleDatumValue};
 use std::fmt::Debug;
 use std::{fmt::Display, str::FromStr};
+use tracing::{error, trace};
 use unicode_categories::UnicodeCategories;
-
-use super::SChar;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -53,19 +53,14 @@ enum ParseState {
 
 macro_rules! change_state {
     ($current:expr => $state:ident) => {
-        println!(
-            "datum [{}] ident state {:?} => {:?}",
-            line!(),
-            $current,
-            ParseState::$state,
-        );
+        trace!("change state {:?} => {:?}", $current, ParseState::$state,);
         $current = ParseState::$state;
     };
 }
 
 macro_rules! save {
     ($character:expr => $buffer:expr) => {
-        println!("datum [{}] ident push {:?}", line!(), $character);
+        trace!("save {:?}", $character);
         $buffer.push($character);
     };
 }
@@ -138,14 +133,18 @@ impl DatumValue for SIdentifier {}
 
 impl SimpleDatumValue for SIdentifier {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
+        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _scope = _span.enter();
+
         let s = if s.starts_with('|') && s.ends_with('|') {
             &s[1..s.len() - 1]
+            // TODO: adjust span down.
         } else {
             s
         };
 
         if s.is_empty() {
-            eprintln!("Identifier is an empty string");
+            error!("Identifier is an empty string");
             return Err(invalid_identifier_input(span));
         }
 
@@ -155,7 +154,7 @@ impl SimpleDatumValue for SIdentifier {
         let mut mark: usize = 0;
 
         for (i, c) in s.char_indices() {
-            println!("datum ident ({i}, {c:?}) requires escape: {requires_escape}");
+            trace!("match ({i}, {c:?}) requires escape: {requires_escape}");
 
             match (current_state, c) {
                 (ParseState::Start, '+' | '-') => {
@@ -249,17 +248,17 @@ impl SimpleDatumValue for SIdentifier {
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
                 (s, c) => {
-                    eprintln!("Not expecting {c:?} in state {s:?}");
+                    error!("Not expecting {c:?} in state {s:?}");
                     return Err(invalid_identifier_input(span));
                 }
             }
         }
         if current_state == ParseState::InNumber {
-            eprintln!("identifier cannot be a number");
+            error!("identifier cannot be a number");
             Err(invalid_identifier_input(span))
         } else if current_state == ParseState::InEscape || current_state == ParseState::InHexEscape
         {
-            eprintln!("incomplete escape sequence, in {current_state:?}");
+            error!("incomplete escape sequence, in {current_state:?}");
             Err(invalid_escape_string(span))
         } else if requires_escape {
             Ok(SIdentifier(format!("|{buffer}|")))
@@ -309,80 +308,3 @@ impl SIdentifier {
 // ------------------------------------------------------------------------------------------------
 // Private Functions
 // ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Unit Tests
-// ------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    macro_rules! success_test {
-        ($test_name:ident, $input_and_result:expr) => {
-            success_test!($test_name, $input_and_result, $input_and_result);
-        };
-        ($test_name:ident, $input:expr, $result:expr) => {
-            #[test]
-            fn $test_name() {
-                use pretty_assertions::assert_eq;
-                use std::str::FromStr;
-                let test_str = $input;
-                let s = $crate::reader::datum::SIdentifier::from_str(test_str);
-                assert!(s.is_ok());
-                assert_eq!(s.unwrap().as_ref(), $result);
-            }
-        };
-    }
-    macro_rules! failure_test {
-        ($test_name:ident, $input:expr) => {
-            #[test]
-            fn $test_name() {
-                use std::str::FromStr;
-                let test_str = $input;
-                let s = $crate::reader::datum::SIdentifier::from_str(test_str);
-                assert!(s.is_err());
-            }
-        };
-    }
-
-    success_test!(from_str_a, "a");
-
-    success_test!(from_str_plus, "+");
-
-    success_test!(from_str_divide, "÷");
-
-    success_test!(from_str_vbar_a, "|a|", "a");
-
-    success_test!(from_str_with_spaces, " a ", "| a |");
-
-    success_test!(from_str_space, " ", "| |");
-
-    success_test!(from_str_with_reserved_chars, "a[0].ba#", "|a[0].ba#|");
-
-    success_test!(
-        from_str_with_ascii_escape,
-        "hello \\\"scheme\\\" from rust",
-        "|hello \"scheme\" from rust|"
-    );
-
-    success_test!(
-        from_str_with_hex_escape,
-        "\\x03B1; is named GREEK SMALL LETTER ALPHA.",
-        "|α is named GREEK SMALL LETTER ALPHA.|"
-    );
-
-    failure_test!(from_str_empty, "");
-
-    failure_test!(from_str_vbar_empty, "||");
-
-    failure_test!(from_str_incomplete_ascii_escape, "str\\");
-
-    failure_test!(from_str_incomplete_hex_escape, "str\\x20");
-
-    failure_test!(from_str_number, "12");
-
-    failure_test!(from_str_plus_number, "+12");
-}

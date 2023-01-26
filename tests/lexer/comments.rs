@@ -4,9 +4,7 @@ use paste::paste;
 // Single-valued success cases
 // ------------------------------------------------------------------------------------------------
 
-success_case!(line_comment, "; ignore this: #f\n" => line_comment);
-
-success_case!(line_comment_at_eoi, "; ignore this: #f" => line_comment);
+success_case!(! line_comment, "; ignore this: #f\n" => line_comment);
 
 // ------------------------------------------------------------------------------------------------
 // Multi-valued success cases

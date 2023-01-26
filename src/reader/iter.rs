@@ -22,6 +22,7 @@ use std::str::FromStr;
 
 use super::datum::{SIdentifier, SList};
 use super::ReadContext;
+use tracing::{error, trace, trace_span};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -63,19 +64,15 @@ impl<'a> From<TokenIter<'a>> for DatumIter<'a> {
 macro_rules! atomic_datum {
     ($me:expr, $current_state:expr, $datum:expr) => {
         if $current_state.state() == State::List || $current_state.state() == State::Vector {
-            println!("reader adding [{:03}] {:?} to open list", line!(), $datum);
+            trace!("adding datum {:?} to open list", $datum);
             $current_state.add_content($datum.clone().into());
         } else {
             if let State::DatumAssign(label) = $current_state.state() {
-                println!(
-                    "reader [{:03}] assigning {:?} to label {label:?}",
-                    line!(),
-                    $datum
-                );
+                trace!("assigning datum {:?} to label {label:?}", $datum);
                 $current_state = $me.state_stack.pop().unwrap();
                 $current_state.insert_labeled(label, $datum.clone().into());
             }
-            println!("reader datum [{:03}] {:?}", line!(), $datum);
+            trace!("return datum {:?}", $datum);
             return Some(Ok($datum.into()));
         }
     };
@@ -89,7 +86,7 @@ macro_rules! atomic_datum_from_str {
                 atomic_datum!($me, $current_state, datum);
             }
             Err(e) => {
-                println!("reader error [{:03}] {e:?}", line!());
+                error!("return error {e:?}");
                 return Some(Err(e));
             }
         }
@@ -100,6 +97,9 @@ impl Iterator for DatumIter<'_> {
     type Item = Result<Datum, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        let span = trace_span!("next-datum");
+        let _scope = span.enter();
+
         let mut current_state = IteratorState::default();
         while let Some(token) = self.source.next() {
             let token = match token {
@@ -109,7 +109,7 @@ impl Iterator for DatumIter<'_> {
                 }
             };
 
-            println!("reader match ({current_state:?}, {token:?})");
+            trace!("match ({current_state:?}, {token:?})");
 
             match (current_state.state(), token.kind()) {
                 (_, TokenKind::Identifier) => {
@@ -124,7 +124,7 @@ impl Iterator for DatumIter<'_> {
                 (_, TokenKind::String) => {
                     atomic_datum_from_str!(self, current_state, token => SString);
                 }
-                (_, TokenKind::Numeric) => {
+                (_, TokenKind::Number) => {
                     atomic_datum_from_str!(self, current_state, token => SNumber);
                 }
                 (_, TokenKind::OpenParenthesis) => {
@@ -162,7 +162,7 @@ impl Iterator for DatumIter<'_> {
                     current_state = State::DatumComment.into();
                 }
                 (State::DatumComment, k) if is_datum(k) && !self.return_comments => {
-                    println!("reader dropping token {token:?}; you said it was commented out");
+                    trace!("dropping token {token:?}; you said it was commented out");
                     current_state = self.state_stack.pop().unwrap();
                 }
                 (_, TokenKind::DatumAssign) => {
@@ -181,8 +181,9 @@ impl Iterator for DatumIter<'_> {
                     let label = u16::from_str(label_str).expect("not a number?");
                     return Some(current_state.get_labeled(label, token.span()));
                 }
+                (_, TokenKind::LineComment | TokenKind::BlockComment) => {}
                 (s, kind) => {
-                    eprintln!("reader not expecting {kind:?} in state {s:?}");
+                    error!("not expecting {kind:?} in state {s:?}");
                     return Some(Err(unexpected_token(
                         kind,
                         current_state.context(),

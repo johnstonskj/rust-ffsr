@@ -12,6 +12,7 @@ YYYYY
 use crate::input::iter::CharIndices;
 use crate::Sourced;
 use std::borrow::{Borrow, Cow};
+use tracing::trace;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -40,7 +41,7 @@ impl<'a> From<&'a str> for Input<'a> {
 
 impl From<String> for Input<'_> {
     fn from(s: String) -> Self {
-        println!("Input from {:?}/{}", s, s.len());
+        trace!("input source {:?}; length: {}", s, s.len());
         Self {
             source: Cow::Owned(s),
         }

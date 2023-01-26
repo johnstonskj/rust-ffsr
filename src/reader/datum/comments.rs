@@ -9,12 +9,13 @@ YYYYY
 
 */
 
-use super::{Datum, DatumValue};
-use crate::error::Error;
+use super::{Datum, DatumValue, SimpleDatumValue};
+use crate::{error::Error, lexer::token::Span};
 use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
+use tracing::{error, trace};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -73,19 +74,32 @@ impl FromStr for SComment {
     type Err = Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if s.starts_with(';') && !s.contains('\n') {
-            Ok(Self::Line(s[1..].trim().to_string()))
-        } else if s.starts_with("#|") && s.ends_with("|#") {
-            Ok(Self::Block(s[2..s.len() - 2].trim().to_string()))
-        } else if s.starts_with("#;") {
-            unimplemented!()
-        } else {
-            unimplemented! {}
-        }
+        Self::from_str_in_span(s, Span::new_char_span_from(s))
     }
 }
 
 impl DatumValue for SComment {}
+
+impl SimpleDatumValue for SComment {
+    fn from_str_in_span(s: &str, _span: crate::lexer::token::Span) -> Result<Self, Error> {
+        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _scope = _span.enter();
+
+        if s.starts_with(';') && !s.contains('\n') {
+            trace!("line comment");
+            Ok(Self::Line(s[1..].trim().to_string()))
+        } else if s.starts_with("#|") && s.ends_with("|#") {
+            trace!("Block comment");
+            Ok(Self::Block(s[2..s.len() - 2].trim().to_string()))
+        } else if s.starts_with("#;") {
+            trace!("Datum comment");
+            unimplemented!()
+        } else {
+            error!("No clue");
+            unimplemented!()
+        }
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

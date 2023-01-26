@@ -9,6 +9,7 @@ YYYYY
 
 */
 
+use super::{Datum, DatumValue, SChar, SimpleDatumValue};
 use crate::{
     error::{invalid_string_input, invalid_unicode_value, Error},
     lexer::token::Span,
@@ -17,8 +18,7 @@ use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
-
-use super::{Datum, DatumValue, SChar, SimpleDatumValue};
+use tracing::trace;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -49,19 +49,14 @@ enum ParseState {
 
 macro_rules! change_state {
     ($current:expr => $state:ident) => {
-        println!(
-            "datum [{}] string state {:?} => {:?}",
-            line!(),
-            $current,
-            ParseState::$state,
-        );
+        trace!("change state {:?} => {:?}", $current, ParseState::$state,);
         $current = ParseState::$state;
     };
 }
 
 macro_rules! save {
     ($character:expr => $buffer:expr) => {
-        println!("datum [{}] string push {:?}", line!(), $character);
+        trace!("save {:?}", $character);
         $buffer.push($character);
     };
 }
@@ -119,15 +114,23 @@ impl FromStr for SString {
 impl DatumValue for SString {}
 
 impl SimpleDatumValue for SString {
+    #[tracing::instrument]
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
         let s = if s.starts_with('"') && s.ends_with('"') {
             &s[1..s.len() - 1]
+            // TODO: adjust span down.
         } else {
             s
         };
+
+        if s.is_empty() {
+            return Ok(Default::default());
+        }
+
         let mut buffer = String::with_capacity(s.len());
         let mut current_state = ParseState::Normal;
         let mut mark: usize = 0;
+
         for (i, c) in s.char_indices() {
             match (current_state, c) {
                 (ParseState::Normal, '\\') => {
@@ -229,46 +232,3 @@ impl SString {
 // ------------------------------------------------------------------------------------------------
 // Private Functions
 // ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Unit Tests
-// ------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use crate::reader::datum::SString;
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
-
-    #[test]
-    fn from_str_with_hex_escape() {
-        let test_str = "\\x03B1; is named GREEK SMALL LETTER ALPHA.";
-        let s = SString::from_str(test_str);
-        assert!(s.is_ok());
-        assert_eq!(s.unwrap().as_ref(), "α is named GREEK SMALL LETTER ALPHA.");
-    }
-
-    #[test]
-    fn from_str_with_newline() {
-        let test_str = r#"Here’s text \
-       containing just one line"#;
-        let s = SString::from_str(test_str);
-        assert!(s.is_ok());
-        assert_eq!(s.unwrap().as_ref(), "Here’s text containing just one line");
-    }
-
-    #[test]
-    fn from_str_with_quote() {
-        let test_str = "The word \"recursion\" has many meanings.";
-        let s = SString::from_str(test_str);
-        assert!(s.is_ok());
-        assert_eq!(
-            s.unwrap().as_ref(),
-            "The word \"recursion\" has many meanings."
-        );
-    }
-}

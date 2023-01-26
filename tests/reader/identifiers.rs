@@ -1,206 +1,45 @@
-use ffsr::{
-    lexer::Lexer,
-    reader::{datum::Datum, Reader},
-};
-use pretty_assertions::assert_eq;
+use ffsr::reader::datum::SIdentifier;
+use paste::paste;
+use std::str::FromStr;
 
-#[test]
-fn single_a() {
-    let reader = Reader::from(Lexer::from("a"));
-    let mut iter = reader.iter();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "a");
-    } else {
-        panic!()
-    }
-}
+success_case!(single_a, "a" => Identifier, SIdentifier::from_str("a").unwrap());
 
-#[test]
-fn plus() {
-    let reader = Reader::from(Lexer::from("+"));
-    let mut iter = reader.iter();
+success_case!(plus, "+" => Identifier, SIdentifier::from_str("+").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "+");
-    } else {
-        panic!()
-    }
-}
+success_case!(three_dots, "..." => Identifier, SIdentifier::from_str("...").unwrap());
 
-#[test]
-fn three_dots() {
-    let reader = Reader::from(Lexer::from("..."));
-    let mut iter = reader.iter();
+success_case!(plus_soup_plus, "+soup+" => Identifier, SIdentifier::from_str("+soup+").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "...");
-    } else {
-        panic!()
-    }
-}
+success_case!(right_arrow_string, "->string" => Identifier, SIdentifier::from_str("->string").unwrap());
 
-#[test]
-fn plus_soup_plus() {
-    let reader = Reader::from(Lexer::from("+soup+"));
-    let mut iter = reader.iter();
+success_case!(less_than_or_equal_question, "<=?" => Identifier, SIdentifier::from_str("<=?").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "+soup+");
-    } else {
-        panic!()
-    }
-}
+success_case!(spec_example_random, "a34kTMNs" => Identifier, SIdentifier::from_str("a34kTMNs").unwrap());
 
-#[test]
-fn right_arrow_string() {
-    let reader = Reader::from(Lexer::from("->string"));
-    let mut iter = reader.iter();
+success_case!(long_example, "the-word-recursion-has-many-meanings" => Identifier, SIdentifier::from_str("the-word-recursion-has-many-meanings").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "->string");
-    } else {
-        panic!()
-    }
-}
+success_case!(greek_latter_lambda, "λ" => Identifier, SIdentifier::from_str("λ").unwrap());
 
-#[test]
-fn less_than_or_equal_question() {
-    let reader = Reader::from(Lexer::from("<=?"));
-    let mut iter = reader.iter();
+success_case!(vbar_a, "|a|" => Identifier, SIdentifier::from_str("a").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "<=?");
-    } else {
-        panic!()
-    }
-}
+success_case!(vbar_spaces, "|a b\tc|" => Identifier, SIdentifier::from_str("|a b\tc|").unwrap());
 
-#[test]
-fn random_string() {
-    let reader = Reader::from(Lexer::from("a34kTMNs"));
-    let mut iter = reader.iter();
+success_case!(single_emoji, "☺️️" => Identifier, SIdentifier::from_str( "☺️️").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "a34kTMNs");
-    } else {
-        panic!()
-    }
-}
+success_case!(fancy, "〜foo〜" => Identifier, SIdentifier::from_str("〜foo〜").unwrap());
 
-#[test]
-fn long_example() {
-    let reader = Reader::from(Lexer::from("the-word-recursion-has-many-meanings"));
-    let mut iter = reader.iter();
+success_case!(at_here, "@here" => Identifier, SIdentifier::from_str("@here").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "the-word-recursion-has-many-meanings");
-    } else {
-        panic!()
-    }
-}
+success_case!(one_world, "1world" => Identifier, SIdentifier::from_str("1world").unwrap());
 
-#[test]
-fn a_greek_letter() {
-    let reader = Reader::from(Lexer::from("λ"));
-    let mut iter = reader.iter();
+success_case!(line_break, "|hel\nlo|" => Identifier, SIdentifier::from_str("|hel\nlo|").unwrap());
 
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "λ");
-    } else {
-        panic!()
-    }
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------
 
-#[test]
-fn vbar_a() {
-    let reader = Reader::from(Lexer::from("|a|"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "a");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn vbar_spaces() {
-    let reader = Reader::from(Lexer::from("|a b\tc|"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "|a b\tc|");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn vbar_empty_error() {
-    let reader = Reader::from(Lexer::from("||"));
-    let mut iter = reader.iter();
-
-    assert!(matches!(iter.next(), Some(Err(_))));
-}
-
-#[test]
-fn single_emoji() {
-    let s = "☺️️";
-    let reader = Reader::from(Lexer::from(s));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str().as_bytes(), s.as_bytes());
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn fancy() {
-    let reader = Reader::from(Lexer::from("〜foo〜"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "〜foo〜");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn at_here() {
-    let reader = Reader::from(Lexer::from("@here"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "@here");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn one_world() {
-    let reader = Reader::from(Lexer::from("1world"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "1world");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn line_break() {
-    let reader = Reader::from(Lexer::from("|hel\nlo|"));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::Identifier(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "|hel\nlo|");
-    } else {
-        panic!()
-    }
-}
+failure_case!(vbar_empty_error, "||");

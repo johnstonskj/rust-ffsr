@@ -14,6 +14,7 @@ use crate::lexer::token::Span;
 use crate::reader::datum::{Datum, DatumValue, SimpleDatumValue};
 use std::fmt::{Binary, Debug, LowerHex, Octal, UpperHex};
 use std::{fmt::Display, str::FromStr};
+use tracing::{error, trace};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -152,12 +153,7 @@ macro_rules! tuple_number_impl {
 
 macro_rules! change_state {
     ($current:expr => $state:ident) => {
-        println!(
-            "datum [{}] number state {:?} => {:?}",
-            line!(),
-            $current,
-            ParseState::$state,
-        );
+        trace!("change state {:?} => {:?}", $current, ParseState::$state,);
         $current = ParseState::$state;
     };
 }
@@ -496,8 +492,11 @@ impl DatumValue for SNumber {}
 
 impl SimpleDatumValue for SNumber {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
+        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _scope = _span.enter();
+
         if s.is_empty() {
-            eprintln!("Number is an empty string");
+            error!("Number is an empty string");
             return Err(invalid_numeric_input(span));
         }
 
@@ -508,7 +507,7 @@ impl SimpleDatumValue for SNumber {
         let mut result = ParseResult::Fixnum;
 
         for (i, c) in s.char_indices() {
-            println!("datum number ({i}, {c:?})");
+            trace!("match ({i}, {c:?})");
 
             match (current_state, c) {
                 (ParseState::Start, '#') => {
@@ -519,7 +518,7 @@ impl SimpleDatumValue for SNumber {
                         exactness = Some(Exactness::try_from(c)?);
                         change_state!(current_state => Start);
                     } else {
-                        eprintln!("Number cannot have more than one exactness prefix");
+                        error!("Number cannot have more than one exactness prefix");
                         return Err(invalid_numeric_input(span));
                     }
                 }
@@ -528,7 +527,7 @@ impl SimpleDatumValue for SNumber {
                         radix = Some(Radix::try_from(c)?);
                         change_state!(current_state => Start);
                     } else {
-                        eprintln!("Number cannot have more than one radix prefix");
+                        error!("Number cannot have more than one radix prefix");
                         return Err(invalid_numeric_input(span));
                     }
                 }
@@ -580,7 +579,7 @@ impl SimpleDatumValue for SNumber {
                     change_state!(current_state => InComplex);
                 }
                 (s, c) => {
-                    eprintln!("Not expecting {c:?} in state {s:?}");
+                    error!("Not expecting {c:?} in state {s:?}");
                     return Err(invalid_numeric_input(span));
                 }
             }
@@ -613,9 +612,7 @@ impl SNumber {
                 Ok(SNumber::Flonum(Flonum::from(f64::from_str(s).unwrap())))
             }
             _ => {
-                eprintln!(
-                    "Couldn't make a {expecting:?}; exactness: {exactness:?}, radix: {radix}"
-                );
+                error!("Couldn't make a {expecting:?}; exactness: {exactness:?}, radix: {radix}");
                 Err(invalid_numeric_input(span))
             }
         }
@@ -680,106 +677,3 @@ impl SNumber {
 // ------------------------------------------------------------------------------------------------
 // Private Functions
 // ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Unit Tests
-// ------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use crate::reader::datum::{Fixnum, Flonum, SNumber};
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
-
-    #[test]
-    fn fixnum_display() {
-        assert_eq!(format!("{}", Fixnum::from(109)).as_str(), "109")
-    }
-
-    #[test]
-    fn fixnum_display_negative() {
-        assert_eq!(format!("{}", Fixnum::from(-109)).as_str(), "-109")
-    }
-
-    #[test]
-    fn fixnum_display_with_sign() {
-        assert_eq!(format!("{:+}", Fixnum::from(109)).as_str(), "+109")
-    }
-
-    #[test]
-    fn fixnum_debug() {
-        assert_eq!(format!("{:?}", Fixnum::from(109)).as_str(), "#e109")
-    }
-
-    #[test]
-    fn fixnum_display_binary() {
-        assert_eq!(format!("{:b}", Fixnum::from(109)).as_str(), "#b1101101")
-    }
-
-    #[test]
-    fn fixnum_display_octal() {
-        assert_eq!(format!("{:o}", Fixnum::from(109)).as_str(), "#o155")
-    }
-
-    #[test]
-    fn fixnum_display_hex_lower() {
-        assert_eq!(format!("{:x}", Fixnum::from(109)).as_str(), "#x6d")
-    }
-
-    #[test]
-    fn fixnum_display_hex_upper() {
-        assert_eq!(format!("{:X}", Fixnum::from(109)).as_str(), "#x6D")
-    }
-
-    #[test]
-    fn from_str_fixnum_zero() {
-        assert_eq!(
-            SNumber::from_str("0").unwrap(),
-            SNumber::Fixnum(Fixnum::from(0))
-        );
-    }
-
-    #[test]
-    fn from_str_fixnum() {
-        assert_eq!(
-            SNumber::from_str("9762457").unwrap(),
-            SNumber::Fixnum(Fixnum::from(9762457))
-        );
-    }
-
-    #[test]
-    fn from_str_fixnum_pos() {
-        assert_eq!(
-            SNumber::from_str("+9762457").unwrap(),
-            SNumber::Fixnum(Fixnum::from(9762457))
-        );
-    }
-
-    #[test]
-    fn from_str_fixnum_neg() {
-        assert_eq!(
-            SNumber::from_str("-9762457").unwrap(),
-            SNumber::Fixnum(Fixnum::from(-9762457))
-        );
-    }
-
-    #[test]
-    fn from_str_flonum_zero() {
-        assert_eq!(
-            SNumber::from_str("0.0").unwrap(),
-            SNumber::Flonum(Flonum::from(0.0))
-        );
-    }
-
-    #[test]
-    fn from_str_flonum() {
-        assert_eq!(
-            SNumber::from_str("123.45").unwrap(),
-            SNumber::Flonum(Flonum::from(123.45))
-        );
-    }
-}

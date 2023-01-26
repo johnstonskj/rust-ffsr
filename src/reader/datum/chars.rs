@@ -18,6 +18,7 @@ use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
+use tracing::{error, trace};
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -115,7 +116,10 @@ impl DatumValue for SChar {}
 
 impl SimpleDatumValue for SChar {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
-        println!("SChar? {:?}", s);
+        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _scope = _span.enter();
+
+        trace!("SChar? {:?}", s);
         if s.len() > 2 && s.starts_with("#\\") {
             let s = &s[2..];
             if s == "alarm" {
@@ -147,10 +151,12 @@ impl SimpleDatumValue for SChar {
                 if chars.len() == 1 {
                     Ok(Self::from(chars.remove(0)))
                 } else {
+                    error!("Unknown char name in {s:?}");
                     Err(invalid_char_name(s, span))
                 }
             }
         } else {
+            error!("Char does not start with prefix '#\\'");
             Err(invalid_char_input(span))
         }
     }
@@ -396,39 +402,3 @@ impl FusedIterator for EscapeUnicode {}
 // ------------------------------------------------------------------------------------------------
 // Private Functions
 // ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Unit Tests
-// ------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use crate::reader::datum::SString;
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
-
-    #[test]
-    fn from_str_with_ascii_escape() {
-        let test_str = "\u{00} a \u{07} b \u{08} r \r n \n t \t \" \\ |";
-        let s = SString::from_str(test_str);
-        assert!(s.is_ok());
-        let results: String = s.unwrap().escape_default().collect();
-        assert_eq!(
-            results.as_str(),
-            "\\x0; a \\a b \\b r \\r n \\n t \\t \\\" \\|"
-        );
-    }
-
-    #[test]
-    fn from_str_with_unicode_escape() {
-        let test_str = "γϛ";
-        let s = SString::from_str(test_str);
-        assert!(s.is_ok());
-        let results: String = s.unwrap().escape_default().collect();
-        assert_eq!(results.as_str(), "\\x3b3;\\x3db;");
-    }
-}

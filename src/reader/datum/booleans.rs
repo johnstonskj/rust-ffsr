@@ -9,6 +9,7 @@ YYYYY
 
 */
 
+use crate::reader::datum::{Datum, DatumValue, SimpleDatumValue};
 use crate::{
     error::{invalid_boolean_input, Error},
     lexer::token::Span,
@@ -17,8 +18,7 @@ use std::{
     fmt::{Debug, Display},
     str::FromStr,
 };
-
-use super::{Datum, DatumValue, SimpleDatumValue};
+use tracing::error;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -85,11 +85,15 @@ impl DatumValue for SBoolean {}
 
 impl SimpleDatumValue for SBoolean {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
+        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _scope = _span.enter();
+
         if s == "#t" {
             Ok(SBoolean::from(true))
         } else if s == "#f" {
             Ok(SBoolean::from(false))
         } else {
+            error!("Invalid value for boolean {s:?}");
             Err(invalid_boolean_input(span))
         }
     }
@@ -98,34 +102,3 @@ impl SimpleDatumValue for SBoolean {
 // ------------------------------------------------------------------------------------------------
 // Private Functions
 // ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Unit Tests
-// ------------------------------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use crate::reader::datum::SBoolean;
-    use pretty_assertions::assert_eq;
-    use std::str::FromStr;
-
-    #[test]
-    fn from_str_true() {
-        let test_str = "#t";
-        let s = SBoolean::from_str(test_str);
-        assert!(s.is_ok());
-        assert_eq!(s.unwrap(), SBoolean::from(true));
-    }
-
-    #[test]
-    fn from_str_false() {
-        let test_str = "#f";
-        let s = SBoolean::from_str(test_str);
-        assert!(s.is_ok());
-        assert_eq!(s.unwrap(), SBoolean::from(false));
-    }
-}

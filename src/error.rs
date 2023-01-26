@@ -10,6 +10,7 @@ use crate::{
 };
 use ariadne::{Color, Fmt, Label, Report, ReportKind, Source};
 use std::fmt::{Debug, Display};
+use tracing::error;
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
@@ -562,7 +563,7 @@ impl Error {
                 .print(Source::from(source.as_ref()))
                 .expect("Could not write error as report");
         } else {
-            println!("{}", self);
+            error!("{}", self);
         }
     }
 }

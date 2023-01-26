@@ -1,124 +1,25 @@
-use ffsr::lexer::Lexer;
-use ffsr::reader::datum::Datum;
-use ffsr::reader::Reader;
-use pretty_assertions::assert_eq;
+use ffsr::reader::datum::SString;
+use paste::paste;
+use std::str::FromStr;
 
-#[test]
-fn empty() {
-    let reader = Reader::from(Lexer::from("\"\" "));
-    let mut iter = reader.iter();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "");
-    } else {
-        panic!()
-    }
-}
+success_case!(empty, "\"\"" => String, SString::default());
 
-#[test]
-fn empty_eoi() {
-    let reader = Reader::from(Lexer::from("\"\""));
-    let mut iter = reader.iter();
+success_case!(hello, "\"hello\"" => String, SString::from_str("hello").unwrap());
 
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "");
-    } else {
-        panic!()
-    }
-}
+success_case!(hello_with_mnemonic_escape, "\"hel\\\"lo\"" => String, SString::from_str("hel\"lo").unwrap());
 
-#[test]
-fn simple() {
-    let reader = Reader::from(Lexer::from("\"hello\" "));
-    let mut iter = reader.iter();
+success_case!(hello_with_hex_escape, "\"hel\\x00fd;lo\"" => String, SString::from_str("helýlo").unwrap());
 
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "hello");
-    } else {
-        panic!()
-    }
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------
 
-#[test]
-fn simple_eoi() {
-    let reader = Reader::from(Lexer::from("\"hello\""));
-    let mut iter = reader.iter();
+failure_case!(incomplete_string, "\"hello #t");
 
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "hello");
-    } else {
-        panic!()
-    }
-}
+failure_case!(bad_mnemonic_escape, "\"hel\\zlo\"");
 
-#[test]
-fn simple_with_escape() {
-    let reader = Reader::from(Lexer::from("\"hel\\\"lo\" "));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "hel\"lo");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn simple_with_escape_eoi() {
-    let reader = Reader::from(Lexer::from("\"hel\\\"lo\""));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "hel\"lo");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn simple_with_hex_escape() {
-    let reader = Reader::from(Lexer::from("\"hel\\x00fd;lo\" "));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "helýlo");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn simple_with_hex_escape_eoi() {
-    let reader = Reader::from(Lexer::from("\"hel\\x00fd;lo\""));
-    let mut iter = reader.iter();
-
-    if let Ok(Datum::String(id)) = iter.next().unwrap() {
-        assert_eq!(id.as_str(), "helýlo");
-    } else {
-        panic!()
-    }
-}
-
-#[test]
-fn incomplete_string_eoi() {
-    let reader = Reader::from(Lexer::from("\" #t #f"));
-    let mut iter = reader.iter();
-
-    assert!(iter.next().unwrap().is_err());
-}
-
-#[test]
-fn with_bad_hex_escape() {
-    let reader = Reader::from(Lexer::from("\"hel\\x00fdlo\""));
-    let mut iter = reader.iter();
-
-    assert!(iter.next().unwrap().is_err());
-}
-
-#[test]
-fn with_bad_mnemonic_escape() {
-    let reader = Reader::from(Lexer::from("\"hel\\zlo\""));
-    let mut iter = reader.iter();
-
-    assert!(iter.next().unwrap().is_err());
-}
+failure_case!(bad_hex_escape, "\"hel\\x00fdlo\"");

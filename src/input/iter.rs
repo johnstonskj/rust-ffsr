@@ -88,10 +88,12 @@ impl<'a> CharIndices<'a> {
         }
     }
 
+    #[inline(always)]
     pub fn push_back(&mut self, v: CharIndex) {
         self.pushback_stack.push(v)
     }
 
+    #[inline(always)]
     pub fn peek(&mut self) -> Option<&CharIndex> {
         if let Some(v) = self.next() {
             self.push_back(v);

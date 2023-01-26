@@ -50,9 +50,7 @@ pub enum TokenKind {
     Identifier,
     Character,
     String,
-    NumericExactnessPrefix,
-    NumericRadixPrefix,
-    Numeric,
+    Number,
     Boolean,
     LineComment,
     BlockComment,
@@ -237,18 +235,8 @@ impl Token {
     }
 
     #[inline(always)]
-    pub fn is_numeric(&self) -> bool {
-        matches!(&self.kind, TokenKind::Numeric)
-    }
-
-    #[inline(always)]
-    pub fn is_numeric_exactness_prefix(&self) -> bool {
-        matches!(&self.kind, TokenKind::NumericExactnessPrefix)
-    }
-
-    #[inline(always)]
-    pub fn is_numeric_radix_prefix(&self) -> bool {
-        matches!(&self.kind, TokenKind::NumericRadixPrefix)
+    pub fn is_number(&self) -> bool {
+        matches!(&self.kind, TokenKind::Number)
     }
 
     #[inline(always)]
@@ -307,9 +295,7 @@ impl Display for TokenKind {
                 Self::Identifier => "identifier",
                 Self::Character => "character",
                 Self::String => "string",
-                Self::Numeric => "numeric",
-                Self::NumericExactnessPrefix => "exactness prefix",
-                Self::NumericRadixPrefix => "radix prefix",
+                Self::Number => "number",
                 Self::Boolean => "boolean",
                 Self::LineComment => "line comment[",
                 Self::BlockComment => "block comment",

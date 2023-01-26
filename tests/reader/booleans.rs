@@ -1,48 +1,14 @@
-use ffsr::lexer::Lexer;
-use ffsr::reader::datum::{Datum, SBoolean};
-use ffsr::reader::Reader;
-use pretty_assertions::assert_eq;
+use ffsr::reader::datum::SBoolean;
+use paste::paste;
 
-#[test]
-fn boolean_true() {
-    let reader = Reader::from(Lexer::from("#t "));
-    let mut iter = reader.iter();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
+success_case!(is_true, "#t" => Boolean, SBoolean::from(true));
 
-    assert_eq!(c, Datum::Boolean(SBoolean::from(true)));
-}
+success_case!(is_false, "#f" => Boolean, SBoolean::from(false));
 
-#[test]
-fn boolean_true_eoi() {
-    let reader = Reader::from(Lexer::from("#t"));
-    let mut iter = reader.iter();
-
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
-
-    assert_eq!(c, Datum::Boolean(SBoolean::from(true)));
-}
-
-#[test]
-fn boolean_false() {
-    let reader = Reader::from(Lexer::from("#f "));
-    let mut iter = reader.iter();
-
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
-
-    assert_eq!(c, Datum::Boolean(false.into()));
-}
-
-#[test]
-fn boolean_false_eoi() {
-    let reader = Reader::from(Lexer::from("#f"));
-    let mut iter = reader.iter();
-
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
-
-    assert_eq!(c, Datum::Boolean(false.into()));
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------

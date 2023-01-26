@@ -1,34 +1,17 @@
-use ffsr::lexer::Lexer;
+macro_rules! assert_complete {
+    ($iter:expr) => {
+        assert!($iter.next().is_none());
+    };
+}
 
-macro_rules! success_case {
-    ($test_name:ident, $input:expr => $kind:ident) => {
-        success_case!($test_name, $input => $kind, $input);
-    };
-    ($test_name:ident, $input:expr => $kind:ident, $expected:expr) => {
-        success_case!($test_name, $input => ($kind, $expected));
-    };
+macro_rules! inner_success_fn {
     ($test_name:ident, $input:expr => $( ($kind:ident, $expected:expr) ),* ) => {
         paste! {
             #[test]
-            fn [<$test_name _with_whitespace>]() {
-                let lexer = $crate::lexer::Lexer::from(format!(" {} ", $input));
-                let mut tokens = lexer.tokens();
-                $(
-
-                    let token = tokens.next().unwrap().expect("tokenizer failed");
-                    println!("success result: {:#?}", token);
-                    assert!(token.[<is_ $kind>]());
-                    ::pretty_assertions::assert_eq!(
-                        lexer.token_str(&token),
-                        ::std::borrow::Cow::Borrowed($expected)
-                    );
-                )*
-
-                assert!(tokens.next().is_none());
-            }
-            #[test]
             fn $test_name() {
-                let lexer = $crate::lexer::Lexer::from($input);
+                let _guard = crate::init_tracing();
+
+                let lexer = ::ffsr::lexer::Lexer::from($input);
                 let mut tokens = lexer.tokens();
                 $(
 
@@ -41,49 +24,74 @@ macro_rules! success_case {
                     );
                 )*
 
-                assert!(tokens.next().is_none());
+                assert_complete!(tokens);
             }
         }
     };
 }
 
-macro_rules! failure_case {
-    ($test_name:ident, $input:expr) => {
-        #[test]
-        fn $test_name() {
-            use ffsr::Sourced;
-            let lexer = $crate::lexer::Lexer::from($input);
-            let mut tokens = lexer.tokens();
-
-            let error = tokens.next().unwrap();
-            println!("failure result: {:#?}", error);
-            assert!(error.is_err());
-
-            let error = error.err().unwrap();
-            error.print(lexer.source_str());
+macro_rules! success_case {
+    ($test_name:ident, $input:expr => $kind:ident) => {
+        success_case!($test_name, $input => $kind, $input);
+    };
+    ($test_name:ident, $input:expr => $kind:ident, $expected:expr) => {
+        success_case!($test_name, $input => ($kind, $expected));
+    };
+    ($test_name:ident, $input:expr => $( ($kind:ident, $expected:expr) ),* ) => {
+        inner_success_fn!($test_name, $input => $( ($kind, $expected) ),*);
+        paste! {
+            inner_success_fn!(
+                [<$test_name _with_whitespace>],
+                format!(" {} ", $input)
+                    => $( ($kind, $expected)  ),*
+            );
         }
     };
-    ($test_name:ident, $input:expr, $error:expr) => {
+    (! $test_name:ident, $input:expr => $kind:ident) => {
+        success_case!(! $test_name, $input => $kind, $input);
+    };
+    (! $test_name:ident, $input:expr => $kind:ident, $expected:expr) => {
+        success_case!(! $test_name, $input => ($kind, $expected));
+    };
+    (! $test_name:ident, $input:expr => $( ($kind:ident, $expected:expr) ),* ) => {
+        inner_success_fn!($test_name, $input => $( ($kind, $expected) ),*);
+    };
+}
+
+macro_rules! failure_case {
+    ($test_name:ident, $input:expr) => {
+        failure_case!($test_name, $input, "");
+    };
+    ($test_name:ident, $input:expr, $expected:expr) => {
         #[test]
         fn $test_name() {
+            let _guard = crate::init_tracing();
+
             use ffsr::Sourced;
-            let lexer = $crate::lexer::Lexer::from($input);
-            let mut tokens = lexer.tokens();
+            let lexer = ::ffsr::lexer::Lexer::from($input);
+            let mut iter = lexer.tokens();
 
-            let error = tokens.next().unwrap();
-            println!("failure result: {:#?}", error);
-            assert!(error.is_err());
-
-            let error = error.err().unwrap();
-            ::pretty_assertions::assert_eq!(error.to_string(), $error.to_string());
-            error.print(lexer.source_str());
+            match iter.next().unwrap() {
+                Err(e) => {
+                    e.print(lexer.source_str());
+                    if !$expected.is_empty() {
+                        ::pretty_assertions::assert_eq!(e.to_string(), $expected.to_string());
+                    }
+                }
+                Ok(v) => {
+                    println!("Unexpected success: {:#?}", v);
+                    panic!();
+                }
+            }
         }
     };
 }
 
 #[test]
-fn test_lexer_empty_string() {
-    let lexer = Lexer::from("");
+fn empty_input() {
+    let _guard = crate::init_tracing();
+
+    let lexer = ::ffsr::lexer::Lexer::from("");
     assert!(lexer.tokens().next().is_none());
 }
 

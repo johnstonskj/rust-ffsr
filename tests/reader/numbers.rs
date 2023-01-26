@@ -1,48 +1,16 @@
-use ffsr::lexer::Lexer;
-use ffsr::reader::datum::{Datum, Fixnum, SNumber};
-use ffsr::reader::Reader;
-use pretty_assertions::assert_eq;
+use ffsr::reader::datum::{Fixnum, SNumber};
+use paste::paste;
 
-#[test]
-fn single_one() {
-    let reader = Reader::from(Lexer::from("1 "));
-    let mut iter = reader.iter();
+// ------------------------------------------------------------------------------------------------
+// Single-valued success cases
+// ------------------------------------------------------------------------------------------------
 
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
+success_case!(single_one, "1" => Number, SNumber::Fixnum(Fixnum::from(1)));
 
-    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(1))));
-}
+success_case!(integer, "12345" => Number, SNumber::Fixnum(Fixnum::from(12345)));
 
-#[test]
-fn single_one_eoi() {
-    let reader = Reader::from(Lexer::from("1"));
-    let mut iter = reader.iter();
+success_case!(binary_integer, "#e#b1011" => Number, SNumber::Fixnum(Fixnum::from(11)));
 
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
-
-    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(1))));
-}
-
-#[test]
-fn integer() {
-    let reader = Reader::from(Lexer::from("101 "));
-    let mut iter = reader.iter();
-
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
-
-    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(101))));
-}
-
-#[test]
-fn integer_eoi() {
-    let reader = Reader::from(Lexer::from("101"));
-    let mut iter = reader.iter();
-
-    let c = iter.next().unwrap(); // not None
-    let c = c.unwrap(); // not Err
-
-    assert_eq!(c, Datum::Number(SNumber::Fixnum(Fixnum::from(101))));
-}
+// ------------------------------------------------------------------------------------------------
+// Failure cases
+// ------------------------------------------------------------------------------------------------
