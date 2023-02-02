@@ -4,6 +4,10 @@ use ffsr::reader::datum::SIdentifier;
 // Single-valued success cases
 // ------------------------------------------------------------------------------------------------
 
+success_case!(empty, "" => SIdentifier, "||");
+
+success_case!(vbar_empty, "||" => SIdentifier, "||");
+
 success_case!(sinple_a, "a" => SIdentifier);
 
 success_case!(single_plus, "+" => SIdentifier);
@@ -33,10 +37,6 @@ success_case!(
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------
-
-failure_case!(empty, "", SIdentifier);
-
-failure_case!(vbar_empty, "||", SIdentifier);
 
 failure_case!(incomplete_ascii_escape, "str\\", SIdentifier);
 

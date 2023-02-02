@@ -48,11 +48,11 @@ fn from_str_with_ascii_escape() {
 
 #[test]
 fn from_str_with_unicode_escape() {
-    let test_str = "γϛ";
+    let test_str = "\\x3b3;\\x3db;";
     let s = SString::from_str(test_str);
     assert!(s.is_ok());
     let results: String = s.unwrap().escape_default().collect();
-    assert_eq!(results.as_str(), "\\x3b3;\\x3db;");
+    assert_eq!(results.as_str(), "γϛ");
 }
 
 // ------------------------------------------------------------------------------------------------

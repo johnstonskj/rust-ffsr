@@ -14,6 +14,8 @@ success_case!(hello_with_mnemonic_escape, "\"hel\\\"lo\"" => String, SString::fr
 
 success_case!(hello_with_hex_escape, "\"hel\\x00fd;lo\"" => String, SString::from_str("helýlo").unwrap());
 
+success_case!(unicode_complex, "\"ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ\"" => String, SString::from_str("ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ").unwrap());
+
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------

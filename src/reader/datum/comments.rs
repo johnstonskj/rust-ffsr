@@ -81,8 +81,8 @@ impl FromStr for SComment {
 impl DatumValue for SComment {}
 
 impl SimpleDatumValue for SComment {
-    fn from_str_in_span(s: &str, _span: crate::lexer::token::Span) -> Result<Self, Error> {
-        let _span = ::tracing::trace_span!("from_str_in_span");
+    fn from_str_in_span(s: &str, span: crate::lexer::token::Span) -> Result<Self, Error> {
+        let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
         if s.starts_with(';') && !s.contains('\n') {
@@ -97,6 +97,16 @@ impl SimpleDatumValue for SComment {
         } else {
             error!("No clue");
             unimplemented!()
+        }
+    }
+}
+
+impl SComment {
+    pub fn type_string(&self) -> &'static str {
+        match self {
+            Self::Datum(_) => "datum-comment",
+            Self::Block(_) => "block-comment",
+            Self::Line(_) => "line-comment",
         }
     }
 }

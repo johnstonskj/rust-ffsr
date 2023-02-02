@@ -9,7 +9,7 @@ YYYYY
 
 */
 
-use crate::error::{invalid_escape_string, invalid_identifier_input, invalid_unicode_value, Error};
+use crate::error::{incomplete_string, invalid_identifier_input, invalid_unicode_value, Error};
 use crate::lexer::iter::{
     is_dot_subsequent, is_identifier_initial, is_identifier_subsequent, is_sign_subsequent,
 };
@@ -133,19 +133,18 @@ impl DatumValue for SIdentifier {}
 
 impl SimpleDatumValue for SIdentifier {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
-        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
         let s = if s.starts_with('|') && s.ends_with('|') {
             &s[1..s.len() - 1]
-            // TODO: adjust span down.
         } else {
             s
         };
 
         if s.is_empty() {
-            error!("Identifier is an empty string");
-            return Err(invalid_identifier_input(span));
+            trace!("Identifier is an empty string");
+            return Ok(SIdentifier("||".to_string()));
         }
 
         let mut requires_escape = false;
@@ -241,25 +240,26 @@ impl SimpleDatumValue for SIdentifier {
                 (ParseState::InHexEscape, ';') => {
                     let hex_str = &s[mark + 1..i];
                     let hex_val = u32::from_str_radix(hex_str, 16)
-                        .map_err(|_| invalid_unicode_value(span))?;
+                        .map_err(|_| invalid_unicode_value::<Self>(span).unwrap_err())?;
                     // TODO: use SChar::is_valid ?
-                    let c = char::from_u32(hex_val).ok_or_else(|| invalid_unicode_value(span))?;
+                    let c = char::from_u32(hex_val)
+                        .ok_or_else(|| invalid_unicode_value::<Self>(span).unwrap_err())?;
 
                     save_and_change_state!(buffer, c, current_state => InRest);
                 }
                 (s, c) => {
                     error!("Not expecting {c:?} in state {s:?}");
-                    return Err(invalid_identifier_input(span));
+                    return invalid_identifier_input(span);
                 }
             }
         }
         if current_state == ParseState::InNumber {
             error!("identifier cannot be a number");
-            Err(invalid_identifier_input(span))
+            invalid_identifier_input(span)
         } else if current_state == ParseState::InEscape || current_state == ParseState::InHexEscape
         {
             error!("incomplete escape sequence, in {current_state:?}");
-            Err(invalid_escape_string(span))
+            incomplete_string(span)
         } else if requires_escape {
             Ok(SIdentifier(format!("|{buffer}|")))
         } else {

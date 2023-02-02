@@ -4,13 +4,10 @@ use paste::paste;
 // Single-valued success cases
 // ------------------------------------------------------------------------------------------------
 
-success_case!(empty, "\"\"" => string);
-
-success_case!(hello, "\"hello\"" => string);
-
-success_case!(hel_mnemonic_escape_lo, "\"hel\\\"lo\"" => string);
-
-success_case!(hel_hex_escape_lo, "\"hel\\x00fd;lo\"" => string);
+success_case!(quote, "'" => quote);
+success_case!(quasi_quote, "`" => quasi_quote);
+success_case!(unquote, "," => unquote);
+success_case!(unquote_splicing, ",@" => unquote_splicing);
 
 // ------------------------------------------------------------------------------------------------
 // Multi-valued success cases
@@ -19,9 +16,3 @@ success_case!(hel_hex_escape_lo, "\"hel\\x00fd;lo\"" => string);
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------
-
-failure_case!(
-    incomplete_string,
-    "\" #t #f",
-    "Incomplete string, expecting a terminating `#\\\"`; span: 0..6"
-);

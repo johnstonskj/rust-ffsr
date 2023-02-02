@@ -11,7 +11,7 @@ YYYYY
 
 use crate::{
     input::indices::{CharIndex, Index},
-    Sourced,
+    SourceId, Sourced,
 };
 use std::str::CharIndices as ActualCharIndices;
 
@@ -25,6 +25,7 @@ use std::str::CharIndices as ActualCharIndices;
 
 #[derive(Debug)]
 pub struct CharIndices<'a> {
+    id: &'a SourceId,
     source: &'a str,
     iter: ActualCharIndices<'a>,
     current_index: Index,
@@ -64,14 +65,20 @@ impl Iterator for CharIndices<'_> {
 
 impl Sourced for CharIndices<'_> {
     #[inline(always)]
+    fn source_id(&self) -> &crate::SourceId {
+        self.id
+    }
+
+    #[inline(always)]
     fn source_str(&self) -> &str {
         self.source
     }
 }
 
 impl<'a> CharIndices<'a> {
-    pub fn new(source: &'a str) -> Self {
+    pub fn new(id: &'a SourceId, source: &'a str) -> Self {
         Self {
+            id,
             source,
             iter: source.char_indices(),
             current_index: Default::default(),
@@ -81,6 +88,7 @@ impl<'a> CharIndices<'a> {
 
     pub fn from(&self, starts_from: Index) -> Self {
         Self {
+            id: self.id,
             source: self.source,
             iter: self.source[starts_from.byte()..].char_indices(),
             current_index: starts_from,

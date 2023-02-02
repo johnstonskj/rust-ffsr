@@ -34,17 +34,15 @@ pub(crate) enum State {
     InIdentifier,
     InVBarIdentifier,
     InVBarIdentifierEscape,
-    InVBarIdentifierHexEscape,
-    InVBarIdentifierHexEscapeDigits,
     InNumberOrIdentifier,
     InDotNumberOrIdentifier,
     InPeculiarIdentifier,
     InNumber,
     InNumberPrefix,
+    InMaybeInf(u8),
+    InMaybeNan(u8),
     InString,
     InStringEscape,
-    InStringHexEscape,
-    InStringHexEscapeDigits,
     InSpecial,
     InCharacter,
     InCharacterName,
@@ -53,7 +51,6 @@ pub(crate) enum State {
     InLineComment,
     InBlockComment,
     InOpenByteVector(char),
-    InDatumRefNum,
     InDatumRef,
 }
 
@@ -79,14 +76,6 @@ impl Default for IteratorState {
 }
 
 impl IteratorState {
-    // #[inline(always)]
-    // pub(crate) fn clone_with_new_state(&self, state: State) -> Self {
-    //     Self {
-    //         state,
-    //         ..self.clone()
-    //     }
-    // }
-
     #[inline(always)]
     pub(crate) fn state(&self) -> State {
         self.state

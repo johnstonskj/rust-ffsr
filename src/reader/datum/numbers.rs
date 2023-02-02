@@ -7,11 +7,16 @@ More detailed description, with
 
 YYYYY
 
+
 */
 
 use crate::error::{invalid_numeric_input, Error};
 use crate::lexer::token::Span;
 use crate::reader::datum::{Datum, DatumValue, SimpleDatumValue};
+use num_bigint::BigInt;
+use num_complex::{Complex64, ComplexFloat};
+use num_rational::{BigRational, Ratio};
+use num_traits::Zero;
 use std::fmt::{Binary, Debug, LowerHex, Octal, UpperHex};
 use std::{fmt::Display, str::FromStr};
 use tracing::{error, trace};
@@ -24,29 +29,59 @@ use tracing::{error, trace};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
-pub enum SNumber {
-    Fixnum(Fixnum),
-    Flonum(Flonum),
-    Ratnum(Ratnum),
-    ExactComplexnum(ExactComplexnum),
-    Complexnum(Complexnum),
-}
+///
+/// Integers
+///
+/// Multi-precision exact integer. There’s no limit of the size of number
+/// except the memory of the machine. Whole numbers, positive or negative;
+/// e.g. –5, 0, 18.
+///
+#[allow(clippy::derive_partial_eq_without_eq)]
+#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Fixnum(BigInt);
 
-#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Fixnum(i64);
+///
+/// Rationals
+///
+/// Multi-precision exact non-integral rational numbers. Both denominator and
+/// numerator are represented by exact integers. There’s no limit of the size
+/// of number except the memory of the machine. The set of numbers that can be
+/// expressed as p/q where p and q are integers; e.g. 9/16 works, but pi (an
+/// irrational number) doesn’t. These include integers (n/1).
+///
+#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Ratnum(BigRational);
 
+///
+/// Reals
+///
+/// Inexact floating-point real numbers. Using double-type of underlying C
+/// compiler, usually IEEE 64-bit floating point number. The set of numbers
+/// that describes all possible positions along a one-dimensional line. This
+/// includes rationals as well as irrational numbers.
+///
 #[derive(Clone, Copy, Default, PartialEq, PartialOrd)]
 pub struct Flonum(f64);
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Ratnum(Fixnum, Fixnum);
+///
+/// Cartesian Complex
+///
+/// Inexact floating-point real numbers. Using double-type of underlying C
+/// compiler, usually IEEE 64-bit floating point number. The set of numbers
+/// that describes all possible positions in a two dimensional space. This
+/// includes real as well as imaginary numbers (a+bi, where a is the real
+/// part, b is the imaginary part, and i is the square root of −1.)
+///
+#[derive(Clone, Copy, Default, PartialEq)]
+pub struct Complexnum(Complex64);
 
-#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct ExactComplexnum(Ratnum, Ratnum);
-
-#[derive(Clone, Copy, Default, PartialEq, PartialOrd)]
-pub struct Complexnum(Flonum, Flonum);
+#[derive(Clone, PartialEq)]
+pub enum SNumber {
+    Fixnum(Fixnum),
+    Ratnum(Ratnum),
+    Flonum(Flonum),
+    Complexnum(Complexnum),
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Exactness {
@@ -82,7 +117,8 @@ enum ParseState {
     InComplex,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(unused)]
+#[derive(Clone, Debug, PartialEq)]
 enum ParseResult {
     Fixnum,
     Flonum,
@@ -119,42 +155,26 @@ macro_rules! number_impl {
     };
 }
 
-macro_rules! tuple_number_impl {
-    ($number:ident, $inner_type:ty, $left:ident, $right:ident) => {
-        impl From<($inner_type, $inner_type)> for $number {
-            fn from(tuple: ($inner_type, $inner_type)) -> Self {
-                Self(tuple.0, tuple.1)
-            }
-        }
-
-        impl From<$number> for SNumber {
-            fn from(v: $number) -> Self {
-                Self::$number(v)
-            }
-        }
-
-        impl From<$number> for Datum {
-            fn from(v: $number) -> Self {
-                Self::Number(SNumber::$number(v))
-            }
-        }
-
-        impl $number {
-            pub fn $left(&self) -> $inner_type {
-                self.0
-            }
-
-            pub fn $right(&self) -> $inner_type {
-                self.1
-            }
-        }
-    };
-}
-
 macro_rules! change_state {
     ($current:expr => $state:ident) => {
         trace!("change state {:?} => {:?}", $current, ParseState::$state,);
         $current = ParseState::$state;
+    };
+}
+
+macro_rules! fixnum_from {
+    ($unsigned:ty, $signed:ty) => {
+        impl From<$unsigned> for Fixnum {
+            fn from(v: $unsigned) -> Self {
+                Self(BigInt::from(v))
+            }
+        }
+
+        impl From<$signed> for Fixnum {
+            fn from(v: $signed) -> Self {
+                Self(BigInt::from(v))
+            }
+        }
     };
 }
 
@@ -276,10 +296,7 @@ impl Exactness {
 
 // ------------------------------------------------------------------------------------------------
 
-number_impl!(Fixnum, i64);
-
-pub const FIXNUM_ZERO: Fixnum = Fixnum(0_i64);
-pub const FIXNUM_ONE: Fixnum = Fixnum(1_i64);
+number_impl!(Fixnum, BigInt);
 
 impl Display for Fixnum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -321,12 +338,56 @@ impl UpperHex for Fixnum {
     }
 }
 
+fixnum_from!(u8, i8);
+fixnum_from!(u16, i16);
+fixnum_from!(u32, i32);
+fixnum_from!(u64, i64);
+fixnum_from!(u128, i128);
+fixnum_from!(usize, isize);
+
+// ------------------------------------------------------------------------------------------------
+
+number_impl!(Ratnum, BigRational);
+
+impl From<Fixnum> for Ratnum {
+    fn from(numerator: Fixnum) -> Self {
+        Self(Ratio::from_integer(numerator.into()))
+    }
+}
+
+impl Display for Ratnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}/{}", self.0.numer(), self.0.denom())
+    }
+}
+
+impl Debug for Ratnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#e{}/{}", self.0.numer(), self.0.denom())
+    }
+}
+
+impl Ratnum {
+    pub fn new(numerator: Fixnum, denominator: Fixnum) -> Self {
+        Self(Ratio::new(numerator.into(), denominator.into()))
+    }
+
+    pub fn is_integer(&self) -> bool {
+        self.0.is_integer()
+    }
+
+    pub fn as_integer(&self) -> Option<Fixnum> {
+        if self.0.is_integer() {
+            Some(self.0.numer().clone().into())
+        } else {
+            None
+        }
+    }
+}
+
 // ------------------------------------------------------------------------------------------------
 
 number_impl!(Flonum, f64);
-
-pub const FLONUM_ZERO: Flonum = Flonum(0_f64);
-pub const FLONUM_ONE: Flonum = Flonum(1_f64);
 
 impl Display for Flonum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -346,84 +407,37 @@ impl Display for Flonum {
 
 impl Debug for Flonum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#i{self}")
+        if self.0.is_infinite() || self.0.is_nan() {
+            write!(f, "{self}")
+        } else {
+            write!(f, "#i{self}")
+        }
+    }
+}
+
+impl From<f32> for Flonum {
+    fn from(v: f32) -> Self {
+        Self(v as f64)
+    }
+}
+
+impl Flonum {
+    pub fn is_rational(&self) -> bool {
+        BigRational::from_float(self.0).is_some()
+    }
+
+    pub fn as_rational(&self) -> Option<Ratnum> {
+        BigRational::from_float(self.0).map(Ratnum)
     }
 }
 
 // ------------------------------------------------------------------------------------------------
 
-tuple_number_impl!(Ratnum, Fixnum, numerator, denominator);
-
-pub const RATNUM_ZERO: Ratnum = Ratnum(FIXNUM_ZERO, FIXNUM_ONE);
-pub const RATNUM_ONE: Ratnum = Ratnum(FIXNUM_ONE, FIXNUM_ONE);
-
-impl From<Fixnum> for Ratnum {
-    fn from(numerator: Fixnum) -> Self {
-        assert!(i64::from(numerator).is_positive());
-        Self(numerator, 1.into())
-    }
-}
-
-impl Default for Ratnum {
-    fn default() -> Self {
-        Self::from(Fixnum::default())
-    }
-}
-
-impl Display for Ratnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}/{}", self.0, self.1)
-    }
-}
-
-impl Debug for Ratnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#e{}/{}", self.0, self.1)
-    }
-}
-
-impl Ratnum {
-    pub fn new(numerator: Fixnum, denominator: Fixnum) -> Self {
-        assert!(i64::from(numerator).is_positive());
-        let d = i64::from(denominator);
-        assert!(d.is_positive() && d != 0);
-        Self(numerator, denominator)
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
-
-tuple_number_impl!(ExactComplexnum, Ratnum, real, imaginary);
-
-pub const EXACT_COMPLEXNUM_ZERO: ExactComplexnum = ExactComplexnum(RATNUM_ZERO, RATNUM_ZERO);
-
-impl Display for ExactComplexnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{:+}i", self.0, self.1)
-    }
-}
-
-impl Debug for ExactComplexnum {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#e{self}")
-    }
-}
-
-impl ExactComplexnum {
-    pub fn new(real: Ratnum, imaginary: Ratnum) -> Self {
-        Self(real, imaginary)
-    }
-}
-
-// ------------------------------------------------------------------------------------------------
-
-tuple_number_impl!(Complexnum, Flonum, real, imaginary);
-
-pub const COMPLEXNUM_ZERO: Complexnum = Complexnum(FLONUM_ZERO, FLONUM_ZERO);
+number_impl!(Complexnum, Complex64);
 
 impl Display for Complexnum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{:+}i", self.0, self.1)
+        write!(f, "{}{:+}i", self.0.re(), self.0.im())
     }
 }
 
@@ -433,14 +447,38 @@ impl Debug for Complexnum {
     }
 }
 
+impl From<Flonum> for Complexnum {
+    fn from(v: Flonum) -> Self {
+        Self(Complex64::from(f64::from(v)))
+    }
+}
+
 impl Complexnum {
     pub fn new(real: Flonum, imaginary: Flonum) -> Self {
-        Self(real, imaginary)
+        Self(num_complex::Complex::new(real.into(), imaginary.into()))
+    }
+
+    pub fn is_real(&self) -> bool {
+        self.0.im().is_zero()
+    }
+
+    pub fn as_real(&self) -> Option<Flonum> {
+        if self.is_real() {
+            Some(self.0.im().into())
+        } else {
+            None
+        }
     }
 }
 
 // ------------------------------------------------------------------------------------------------
 // ------------------------------------------------------------------------------------------------
+
+impl Default for SNumber {
+    fn default() -> Self {
+        Self::Fixnum(Default::default())
+    }
+}
 
 impl Display for SNumber {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -451,7 +489,6 @@ impl Display for SNumber {
                 Self::Fixnum(v) => format!("{v}"),
                 Self::Flonum(v) => format!("{v}"),
                 Self::Ratnum(v) => format!("{v}"),
-                Self::ExactComplexnum(v) => format!("{v}"),
                 Self::Complexnum(v) => format!("{v}"),
             }
         )
@@ -467,7 +504,6 @@ impl Debug for SNumber {
                 Self::Fixnum(v) => format!("{v:?}"),
                 Self::Flonum(v) => format!("{v:?}"),
                 Self::Ratnum(v) => format!("{v:?}"),
-                Self::ExactComplexnum(v) => format!("{v:?}"),
                 Self::Complexnum(v) => format!("{v:?}"),
             }
         )
@@ -492,12 +528,20 @@ impl DatumValue for SNumber {}
 
 impl SimpleDatumValue for SNumber {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
-        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
         if s.is_empty() {
-            error!("Number is an empty string");
-            return Err(invalid_numeric_input(span));
+            error!("Number may not be an empty string");
+            return invalid_numeric_input(span);
+        } else if s == "+inf.0" {
+            return Ok(Flonum::from(f64::INFINITY).into());
+        } else if s == "-inf.0" {
+            return Ok(Flonum::from(f64::NEG_INFINITY).into());
+        } else if s == "+nan.0" {
+            return Ok(Flonum::from(f64::NAN).into());
+        } else if s == "-nan.0" {
+            return Ok(Flonum::from(-f64::NAN).into());
         }
 
         let mut current_state = ParseState::Start;
@@ -519,7 +563,7 @@ impl SimpleDatumValue for SNumber {
                         change_state!(current_state => Start);
                     } else {
                         error!("Number cannot have more than one exactness prefix");
-                        return Err(invalid_numeric_input(span));
+                        return invalid_numeric_input(span);
                     }
                 }
                 (ParseState::InPrefix, c) if Radix::is_valid(c) => {
@@ -528,7 +572,7 @@ impl SimpleDatumValue for SNumber {
                         change_state!(current_state => Start);
                     } else {
                         error!("Number cannot have more than one radix prefix");
-                        return Err(invalid_numeric_input(span));
+                        return invalid_numeric_input(span);
                     }
                 }
                 (ParseState::Start | ParseState::InExponent, '+' | '-') => {
@@ -568,7 +612,7 @@ impl SimpleDatumValue for SNumber {
                         radix.unwrap_or_default(),
                         span,
                     )?;
-                    result = ParseResult::Ratnum(lhs.as_fixnum().unwrap());
+                    result = ParseResult::Ratnum(lhs.as_fixnum().cloned().unwrap());
                     change_state!(current_state => InRational);
                 }
                 (ParseState::InInteger | ParseState::InFractional, '+' | '-') => {
@@ -580,7 +624,7 @@ impl SimpleDatumValue for SNumber {
                 }
                 (s, c) => {
                     error!("Not expecting {c:?} in state {s:?}");
-                    return Err(invalid_numeric_input(span));
+                    return invalid_numeric_input(span);
                 }
             }
         }
@@ -603,9 +647,9 @@ impl SNumber {
         radix: Radix,
         span: Span,
     ) -> Result<Self, Error> {
-        match (expecting, exactness) {
+        match (&expecting, exactness) {
             (ParseResult::Fixnum, Some(Exactness::Exact) | None) => Ok(SNumber::Fixnum(
-                Fixnum::from(i64::from_str_radix(s, radix.into()).unwrap()),
+                Fixnum::from(BigInt::parse_bytes(s.as_bytes(), radix.into()).unwrap()),
             )),
             (ParseResult::Flonum, Some(Exactness::Inexact) | None) => {
                 // TODO: radix MUST be 10
@@ -613,18 +657,26 @@ impl SNumber {
             }
             _ => {
                 error!("Couldn't make a {expecting:?}; exactness: {exactness:?}, radix: {radix}");
-                Err(invalid_numeric_input(span))
+                invalid_numeric_input(span)
             }
         }
+    }
+
+    pub fn is_exact(&self) -> bool {
+        matches!(self, Self::Fixnum(_) | Self::Ratnum(_))
+    }
+
+    pub fn is_inexact(&self) -> bool {
+        !self.is_exact()
     }
 
     pub fn is_fixnum(&self) -> bool {
         matches!(self, Self::Fixnum(_))
     }
 
-    pub fn as_fixnum(&self) -> Option<Fixnum> {
+    pub fn as_fixnum(&self) -> Option<&Fixnum> {
         match self {
-            Self::Fixnum(v) => Some(*v),
+            Self::Fixnum(v) => Some(v),
             _ => None,
         }
     }
@@ -633,9 +685,9 @@ impl SNumber {
         matches!(self, Self::Flonum(_))
     }
 
-    pub fn as_flonum(&self) -> Option<Flonum> {
+    pub fn as_flonum(&self) -> Option<&Flonum> {
         match self {
-            Self::Flonum(v) => Some(*v),
+            Self::Flonum(v) => Some(v),
             _ => None,
         }
     }
@@ -644,20 +696,9 @@ impl SNumber {
         matches!(self, Self::Ratnum(_))
     }
 
-    pub fn as_ratnum(&self) -> Option<Ratnum> {
+    pub fn as_ratnum(&self) -> Option<&Ratnum> {
         match self {
-            Self::Ratnum(v) => Some(*v),
-            _ => None,
-        }
-    }
-
-    pub fn is_exact_complexnum(&self) -> bool {
-        matches!(self, Self::ExactComplexnum(_))
-    }
-
-    pub fn as_exact_complexnum(&self) -> Option<ExactComplexnum> {
-        match self {
-            Self::ExactComplexnum(v) => Some(*v),
+            Self::Ratnum(v) => Some(v),
             _ => None,
         }
     }
@@ -666,10 +707,19 @@ impl SNumber {
         matches!(self, Self::Complexnum(_))
     }
 
-    pub fn as_complexnum(&self) -> Option<Complexnum> {
+    pub fn as_complexnum(&self) -> Option<&Complexnum> {
         match self {
-            Self::Complexnum(v) => Some(*v),
+            Self::Complexnum(v) => Some(v),
             _ => None,
+        }
+    }
+
+    pub fn type_string(&self) -> &'static str {
+        match self {
+            Self::Fixnum(_) => "fixnum",
+            Self::Ratnum(_) => "ratnum",
+            Self::Flonum(_) => "flonum",
+            Self::Complexnum(_) => "complexnum",
         }
     }
 }

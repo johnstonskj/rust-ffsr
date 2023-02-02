@@ -85,7 +85,7 @@ impl DatumValue for SBoolean {}
 
 impl SimpleDatumValue for SBoolean {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
-        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
         if s == "#t" {
@@ -94,7 +94,7 @@ impl SimpleDatumValue for SBoolean {
             Ok(SBoolean::from(false))
         } else {
             error!("Invalid value for boolean {s:?}");
-            Err(invalid_boolean_input(span))
+            invalid_boolean_input(span)
         }
     }
 }

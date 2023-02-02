@@ -6,6 +6,8 @@ use std::str::FromStr;
 // Single-valued success cases
 // ------------------------------------------------------------------------------------------------
 
+success_case!(vbar_empty, "||" => Identifier, SIdentifier::from_str("||").unwrap());
+
 success_case!(single_a, "a" => Identifier, SIdentifier::from_str("a").unwrap());
 
 success_case!(plus, "+" => Identifier, SIdentifier::from_str("+").unwrap());
@@ -38,8 +40,7 @@ success_case!(one_world, "1world" => Identifier, SIdentifier::from_str("1world")
 
 success_case!(line_break, "|hel\nlo|" => Identifier, SIdentifier::from_str("|hel\nlo|").unwrap());
 
+success_case!(unicode_complex, "ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ" => Identifier, SIdentifier::from_str("ཨོཾ་མ་ཎི་པདྨེ་ཧཱུྃ").unwrap());
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------
-
-failure_case!(vbar_empty_error, "||");

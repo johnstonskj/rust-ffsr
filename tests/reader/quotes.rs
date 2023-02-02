@@ -1,16 +1,17 @@
+use ffsr::reader::datum::{Datum, SChar};
 use paste::paste;
 
 // ------------------------------------------------------------------------------------------------
 // Single-valued success cases
 // ------------------------------------------------------------------------------------------------
 
-success_case!(empty, "\"\"" => string);
+success_case!(quote, "'#\\a" => Quote, Box::from(Datum::from(SChar::from('a'))));
 
-success_case!(hello, "\"hello\"" => string);
+success_case!(quasi_quote, "`#\\a" => QuasiQuote, Box::from(Datum::from(SChar::from('a'))));
 
-success_case!(hel_mnemonic_escape_lo, "\"hel\\\"lo\"" => string);
+success_case!(unquote, ",#\\a" => Unquote, Box::from(Datum::from(SChar::from('a'))));
 
-success_case!(hel_hex_escape_lo, "\"hel\\x00fd;lo\"" => string);
+success_case!(unquote_splicing, ",@#\\a" => UnquoteSplicing, Box::from(Datum::from(SChar::from('a'))));
 
 // ------------------------------------------------------------------------------------------------
 // Multi-valued success cases
@@ -20,8 +21,10 @@ success_case!(hel_hex_escape_lo, "\"hel\\x00fd;lo\"" => string);
 // Failure cases
 // ------------------------------------------------------------------------------------------------
 
-failure_case!(
-    incomplete_string,
-    "\" #t #f",
-    "Incomplete string, expecting a terminating `#\\\"`; span: 0..6"
-);
+failure_case!(incomplete_quote, "'");
+
+failure_case!(incomplete_quasi_quote, "`");
+
+failure_case!(incomplete_unquote, ",");
+
+failure_case!(incomplete_unquote_splicing, ",@");

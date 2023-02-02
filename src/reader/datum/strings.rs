@@ -114,11 +114,12 @@ impl FromStr for SString {
 impl DatumValue for SString {}
 
 impl SimpleDatumValue for SString {
-    #[tracing::instrument]
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
+        let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
+        let _scope = _span.enter();
+
         let s = if s.starts_with('"') && s.ends_with('"') {
             &s[1..s.len() - 1]
-            // TODO: adjust span down.
         } else {
             s
         };
@@ -171,9 +172,10 @@ impl SimpleDatumValue for SString {
                 (ParseState::InHexEscape, ';') => {
                     let hex_str = &s[mark + 1..i];
                     let hex_val = u32::from_str_radix(hex_str, 16)
-                        .map_err(|_| invalid_unicode_value(span))?;
+                        .map_err(|_| invalid_unicode_value::<Self>(span).unwrap_err())?;
                     // TODO: use SChar::is_valid ?
-                    let c = char::from_u32(hex_val).ok_or_else(|| invalid_unicode_value(span))?;
+                    let c = char::from_u32(hex_val)
+                        .ok_or_else(|| invalid_unicode_value::<Self>(span).unwrap_err())?;
                     save_and_change_state!(buffer, c, current_state => Normal);
                 }
                 (ParseState::InWhitespaceEol, ' ' | '\t' | '\r' | '\n') => {}
@@ -184,7 +186,7 @@ impl SimpleDatumValue for SString {
                     save!(c => buffer);
                 }
                 _ => {
-                    return Err(invalid_string_input(span));
+                    return invalid_string_input(span);
                 }
             }
         }

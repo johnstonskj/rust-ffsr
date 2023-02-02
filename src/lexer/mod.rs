@@ -59,6 +59,11 @@ impl<'a> From<Input<'a>> for Lexer<'a> {
 
 impl Sourced for Lexer<'_> {
     #[inline(always)]
+    fn source_id(&self) -> &crate::SourceId {
+        self.source.source_id()
+    }
+
+    #[inline(always)]
     fn source_str(&self) -> &str {
         self.source.source_str()
     }

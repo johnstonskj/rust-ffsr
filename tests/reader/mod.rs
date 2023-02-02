@@ -98,8 +98,11 @@ fn empty_input() {
 
 pub mod booleans;
 pub mod chars;
+pub mod comments;
 pub mod identifiers;
 pub mod lists;
 pub mod numbers;
+pub mod quotes;
+pub mod references;
 pub mod strings;
 pub mod vectors;

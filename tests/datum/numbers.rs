@@ -69,6 +69,14 @@ success_case!(!flonum, "123.45" => SNumber, SNumber::Flonum(Flonum::from(123.45)
 
 success_case!(!flonum_inexact, "#i123.45" => SNumber, SNumber::Flonum(Flonum::from(123.45)));
 
+success_case!(!positive_infinity, "+inf.0" => SNumber, SNumber::Flonum(Flonum::from(f64::INFINITY)));
+
+success_case!(!negative_infinity, "-inf.0" => SNumber, SNumber::Flonum(Flonum::from(f64::NEG_INFINITY)));
+
+success_case!(positive_nan, "+nan.0" => SNumber, "+nan.0");
+
+success_case!(negative_nan, "-nan.0" => SNumber, "-nan.0");
+
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------

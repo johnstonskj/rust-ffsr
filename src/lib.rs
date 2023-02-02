@@ -52,13 +52,22 @@ YYYYY
 )]
 #![forbid(unsafe_code)]
 
-use std::slice::SliceIndex;
+use std::{path::PathBuf, slice::SliceIndex};
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SourceId {
+    File(PathBuf),
+    StdIn,
+    String,
+}
+
 pub trait Sourced {
+    fn source_id(&self) -> &SourceId;
+
     fn source_str(&self) -> &str;
 
     fn source_len(&self) -> usize {

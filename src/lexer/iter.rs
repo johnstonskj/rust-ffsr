@@ -10,15 +10,15 @@ YYYYY
 */
 
 use crate::error::{
+    incomplete_block_comment, incomplete_identifier, incomplete_special, incomplete_string,
     invalid_byte_vector_prefix, invalid_char_input, invalid_datum_label, invalid_directive_input,
-    invalid_escape_string, invalid_identifier_input, unclosed_block_comment, unclosed_special,
-    unclosed_string, Error,
+    Error,
 };
 use crate::input::indices::CharIndex;
 use crate::input::iter::CharIndices;
 use crate::lexer::internals::{IteratorState, State};
 use crate::lexer::token::{Span, Token, TokenKind};
-use crate::Sourced;
+use crate::{SourceId, Sourced};
 use tracing::{error, trace, trace_span};
 use unicode_categories::UnicodeCategories;
 
@@ -32,8 +32,8 @@ use unicode_categories::UnicodeCategories;
 
 #[derive(Debug)]
 pub struct TokenIter<'a> {
+    source: CharIndices<'a>,
     state_stack: Vec<IteratorState>,
-    chars: CharIndices<'a>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -147,17 +147,14 @@ macro_rules! return_token {
 }
 
 macro_rules! return_error {
-    ($current_state:expr, $char_index:expr, $error_fn:ident, $state:ident) => {
-        state_change!($current_state => $state);
-        let err = Some(Err($error_fn(Span::new(
+    ($current_state:expr, $char_index:expr, $error_fn:ident) => {
+        state_change!($current_state => Nothing);
+        let err = Some($error_fn(Span::new(
             $current_state.token_starts_at().character(),
             $char_index.index().character(),
-        ))));
+        )));
         error!("return error {err:?}");
         return err;
-    };
-    ($current_state:expr, $char_index:expr, $error_fn:ident) => {
-        return_error!($current_state, $char_index, $error_fn, Nothing);
     };
 }
 
@@ -166,18 +163,23 @@ macro_rules! return_error {
 // ------------------------------------------------------------------------------------------------
 
 impl<'a> From<CharIndices<'a>> for TokenIter<'a> {
-    fn from(chars: CharIndices<'a>) -> Self {
+    fn from(source: CharIndices<'a>) -> Self {
         Self {
             state_stack: Vec::default(),
-            chars,
+            source,
         }
     }
 }
 
 impl Sourced for TokenIter<'_> {
     #[inline(always)]
+    fn source_id(&self) -> &SourceId {
+        self.source.source_id()
+    }
+
+    #[inline(always)]
     fn source_str(&self) -> &str {
-        self.chars.source_str()
+        self.source.source_str()
     }
 }
 
@@ -196,10 +198,15 @@ impl Iterator for TokenIter<'_> {
     type Item = Result<Token, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let span = trace_span!("next-token");
+        let span = trace_span!("next-token", ?self.state_stack);
         let _scope = span.enter();
 
-        let mut current_state = IteratorState::default();
+        let mut current_state = if let Some(state) = self.state_stack.pop() {
+            state
+        } else {
+            IteratorState::default()
+        };
+
         let mut last_char_index = CharIndex::new(0, 0, '\u{00}');
         let mut number_radix: u32 = 10;
 
@@ -258,6 +265,12 @@ impl Iterator for TokenIter<'_> {
                 (State::Nothing | State::InWhitespace, '.') => {
                     state_change_at!(char_index, current_state => InDotNumberOrIdentifier);
                 }
+                (State::InNumberOrIdentifier, 'i') => {
+                    state_change!(current_state => State::InMaybeInf(0));
+                }
+                (State::InNumberOrIdentifier, 'n') => {
+                    state_change!(current_state => State::InMaybeNan(0));
+                }
                 (State::InNumberOrIdentifier, c) if c.is_ascii_digit() => {
                     state_change!(current_state => InNumber);
                 }
@@ -306,29 +319,8 @@ impl Iterator for TokenIter<'_> {
                     state_change!(current_state => InVBarIdentifierEscape);
                 }
                 (State::InVBarIdentifier, _) => {}
-                (State::InVBarIdentifierEscape, c) if is_mnemonic_escape(c) => {
+                (State::InVBarIdentifierEscape, c) if is_mnemonic_escape(c) || c == 'x' => {
                     state_change!(current_state => InVBarIdentifier);
-                }
-                (State::InVBarIdentifierEscape, 'x') => {
-                    state_change!(current_state => InVBarIdentifierHexEscape);
-                }
-                (State::InVBarIdentifierHexEscape, d) if d.is_ascii_hexdigit() => {
-                    // R7Rs says `<hex digit>+`
-                    state_change!(current_state => InVBarIdentifierHexEscapeDigits);
-                }
-                (State::InVBarIdentifierHexEscapeDigits, d) if d.is_ascii_hexdigit() => {}
-                (State::InVBarIdentifierHexEscapeDigits, ';') => {
-                    // TODO: validate hex string
-                    state_change!(current_state => InVBarIdentifier);
-                }
-                (
-                    State::InVBarIdentifierEscape
-                    | State::InVBarIdentifierHexEscape
-                    | State::InVBarIdentifierHexEscapeDigits,
-                    _,
-                ) => {
-                    // TODO: Fix the span, it starts with the string start, not the escape start.
-                    return_error!(current_state, char_index, invalid_identifier_input);
                 }
                 // --------------------------------------------------------------------------------
                 // String values
@@ -342,30 +334,8 @@ impl Iterator for TokenIter<'_> {
                     return_token_and_add_char!(current_state, char_index, String => Nothing);
                 }
                 (State::InString, _) => {}
-                // TODO: '\\' ⟨intraline whitespace⟩*⟨line ending⟩ ⟨intraline whitespace⟩*
-                (State::InStringEscape, c) if is_mnemonic_escape(c) => {
+                (State::InStringEscape, _) => {
                     state_change!(current_state => InString);
-                }
-                (State::InStringEscape, 'x') => {
-                    state_change!(current_state => InStringHexEscape);
-                }
-                (State::InStringHexEscape, d) if d.is_ascii_hexdigit() => {
-                    // R7Rs says `<hex digit>+`
-                    state_change!(current_state => InStringHexEscapeDigits);
-                }
-                (State::InStringHexEscapeDigits, d) if d.is_ascii_hexdigit() => {}
-                (State::InStringHexEscapeDigits, ';') => {
-                    // TODO: validate hex string
-                    state_change!(current_state => InString);
-                }
-                (
-                    State::InStringEscape
-                    | State::InStringHexEscape
-                    | State::InStringHexEscapeDigits,
-                    _,
-                ) => {
-                    // TODO: Fix the span, it starts with the string start, not the escape start.
-                    return_error!(current_state, char_index, invalid_escape_string);
                 }
                 // +inf.0 -inf.0 +nan.0 -nan.0
                 // --------------------------------------------------------------------------------
@@ -400,6 +370,36 @@ impl Iterator for TokenIter<'_> {
                 }
                 // --------------------------------------------------------------------------------
                 // Numeric values
+                (State::InMaybeInf(0), 'n') => {
+                    state_change!(current_state => State::InMaybeInf(1));
+                }
+                (State::InMaybeInf(1), 'f') => {
+                    state_change!(current_state => State::InMaybeInf(2));
+                }
+                (State::InMaybeInf(2), '.') => {
+                    state_change!(current_state => State::InMaybeInf(3));
+                }
+                (State::InMaybeInf(3), '0') => {
+                    return_token_and_add_char!(current_state, char_index, Number => Nothing);
+                }
+                (State::InMaybeInf(_), _) => {
+                    state_change!(current_state => State::InIdentifier);
+                }
+                (State::InMaybeNan(0), 'a') => {
+                    state_change!(current_state => State::InMaybeNan(1));
+                }
+                (State::InMaybeNan(1), 'n') => {
+                    state_change!(current_state => State::InMaybeNan(2));
+                }
+                (State::InMaybeNan(2), '.') => {
+                    state_change!(current_state => State::InMaybeNan(3));
+                }
+                (State::InMaybeNan(3), '0') => {
+                    return_token_and_add_char!(current_state, char_index, Number => Nothing);
+                }
+                (State::InMaybeNan(_), _) => {
+                    state_change!(current_state => State::InIdentifier);
+                }
                 (State::Nothing | State::InWhitespace, c) if is_radix_char(c, number_radix) => {
                     state_change_at!(char_index, current_state => InNumber);
                 }
@@ -490,9 +490,6 @@ impl Iterator for TokenIter<'_> {
                 // --------------------------------------------------------------------------------
                 // Datum references
                 (State::InSpecial, c) if c.is_ascii_digit() => {
-                    state_change!(current_state => InDatumRefNum);
-                }
-                (State::InDatumRefNum, c) if c.is_ascii_digit() => {
                     state_change!(current_state => InDatumRef);
                 }
                 (State::InDatumRef, c) if c.is_ascii_digit() => {}
@@ -525,7 +522,7 @@ impl Iterator for TokenIter<'_> {
                 (State::InSpecial, c) => {
                     // push back?
                     error!("Found char {c:?} at {char_index:?}, which doesn't belong in a special");
-                    return_error!(current_state, char_index, unclosed_special);
+                    return_error!(current_state, char_index, incomplete_special);
                 }
                 // --------------------------------------------------------------------------------
                 (s, c) => {
@@ -559,27 +556,19 @@ impl Iterator for TokenIter<'_> {
             }
             // ***** Error Cases *****
             State::InVBarIdentifier => {
-                panic!();
+                return_error!(current_state, last_char_index, incomplete_identifier);
             }
             State::InSpecial => {
-                return_error!(current_state, last_char_index, unclosed_special);
+                return_error!(current_state, last_char_index, incomplete_special);
             }
             State::InDirective => {
                 return_error!(current_state, last_char_index, invalid_directive_input);
             }
             State::InString => {
-                return_error!(current_state, last_char_index, unclosed_string);
-            }
-            State::InStringEscape | State::InStringHexEscape | State::InStringHexEscapeDigits => {
-                return_error!(current_state, last_char_index, invalid_escape_string);
-            }
-            State::InVBarIdentifierEscape
-            | State::InVBarIdentifierHexEscape
-            | State::InVBarIdentifierHexEscapeDigits => {
-                return_error!(current_state, last_char_index, invalid_escape_string);
+                return_error!(current_state, last_char_index, incomplete_string);
             }
             State::InBlockComment => {
-                return_error!(current_state, last_char_index, unclosed_block_comment);
+                return_error!(current_state, last_char_index, incomplete_block_comment);
             }
             State::InOpenByteVector(_) => {
                 return_error!(current_state, last_char_index, invalid_byte_vector_prefix);
@@ -593,30 +582,19 @@ impl Iterator for TokenIter<'_> {
 }
 
 impl TokenIter<'_> {
-    // fn push_state(&mut self, current_state: IteratorState, new_state: State) -> IteratorState {
-    //     let new_state = current_state.clone_with_new_state(new_state);
-    //     self.state_stack.push(current_state);
-    //     new_state
-    // }
-    //
-    // #[inline(always)]
-    // fn pop_state(&mut self) -> IteratorState {
-    //     self.state_stack.pop().unwrap()
-    // }
-
     #[inline(always)]
     fn next_char(&mut self) -> Option<CharIndex> {
-        self.chars.next()
+        self.source.next()
     }
 
     #[inline(always)]
     fn peek_next_char(&mut self) -> Option<&CharIndex> {
-        self.chars.peek()
+        self.source.peek()
     }
 
     #[inline(always)]
     fn push_back_char(&mut self, index: CharIndex) {
-        self.chars.push_back(index)
+        self.source.push_back(index)
     }
 
     #[inline(always)]

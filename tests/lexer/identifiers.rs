@@ -36,3 +36,9 @@ success_case!(three_in_a_row, "a b c" => (identifier, "a"), (identifier, "b"), (
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------
+
+failure_case!(
+    incomplete_identifier,
+    "|hello",
+    "Incomplete identifier, expecting a terminating `#\\|`; span: 0..5"
+);

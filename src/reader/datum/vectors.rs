@@ -20,8 +20,12 @@ use std::fmt::{Debug, Display};
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
+#[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, Default, PartialEq)]
 pub struct SVector(Vec<Datum>);
+
+#[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct SByteVector(Vec<u8>);
 
 // ------------------------------------------------------------------------------------------------
 // Public Functions
@@ -88,6 +92,62 @@ impl FromIterator<Datum> for SVector {
 }
 
 impl DatumValue for SVector {}
+
+// ------------------------------------------------------------------------------------------------
+
+impl Display for SByteVector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "#({})",
+            self.0
+                .iter()
+                .map(|d| d.to_string())
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
+    }
+}
+
+impl Debug for SByteVector {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "#({})",
+            self.0
+                .iter()
+                .map(|d| format!("{:?}", d))
+                .collect::<Vec<String>>()
+                .join(" ")
+        )
+    }
+}
+
+impl From<SByteVector> for Datum {
+    fn from(v: SByteVector) -> Self {
+        Datum::ByteVector(v)
+    }
+}
+
+impl From<u8> for SByteVector {
+    fn from(v: u8) -> Self {
+        Self(vec![v])
+    }
+}
+
+impl From<Vec<u8>> for SByteVector {
+    fn from(v: Vec<u8>) -> Self {
+        Self(v)
+    }
+}
+
+impl FromIterator<u8> for SByteVector {
+    fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
+        Self(Vec::from_iter(iter))
+    }
+}
+
+impl DatumValue for SByteVector {}
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

@@ -74,13 +74,20 @@ pub enum TokenKind {
 
 impl Default for Span {
     fn default() -> Self {
-        Self::zero()
+        Self::new(0, 0)
+    }
+}
+
+impl From<usize> for Span {
+    fn from(v: usize) -> Self {
+        Self::new(v, v)
     }
 }
 
 impl Span {
     #[inline(always)]
     pub fn new(start: usize, end: usize) -> Self {
+        assert!(start <= end);
         Self { start, end }
     }
 
@@ -95,8 +102,19 @@ impl Span {
     }
 
     #[inline(always)]
-    pub fn zero() -> Self {
-        Self::new(0, 0)
+    pub fn with_start_from(&self, other: Self) -> Self {
+        Self {
+            start: other.start,
+            end: self.end,
+        }
+    }
+
+    #[inline(always)]
+    pub fn with_end_from(&self, other: Self) -> Self {
+        Self {
+            start: self.start,
+            end: other.end,
+        }
     }
 
     #[inline(always)]
@@ -110,6 +128,16 @@ impl Span {
     }
 
     #[inline(always)]
+    pub fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+
+    #[inline(always)]
+    pub fn len(&self) -> usize {
+        self.end - self.start
+    }
+
+    #[inline(always)]
     pub fn as_range(&self) -> Range<usize> {
         self.start..self.end
     }
@@ -117,6 +145,26 @@ impl Span {
     #[inline(always)]
     pub fn as_range_inclusive(&self) -> RangeInclusive<usize> {
         self.start..=self.end
+    }
+
+    #[inline(always)]
+    pub fn as_start_range(&self) -> Range<usize> {
+        self.start..self.start
+    }
+
+    #[inline(always)]
+    pub fn as_start_range_inclusive(&self) -> RangeInclusive<usize> {
+        self.start..=self.start
+    }
+
+    #[inline(always)]
+    pub fn as_end_range(&self) -> Range<usize> {
+        self.end..self.end
+    }
+
+    #[inline(always)]
+    pub fn as_end_range_inclusive(&self) -> RangeInclusive<usize> {
+        self.end..=self.end
     }
 }
 
@@ -190,7 +238,7 @@ impl Token {
     }
 
     #[inline(always)]
-    pub fn is_quasiquote(&self) -> bool {
+    pub fn is_quasi_quote(&self) -> bool {
         matches!(&self.kind, TokenKind::QuasiQuote)
     }
 

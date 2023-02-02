@@ -10,7 +10,7 @@ YYYYY
 */
 
 use super::{Datum, DatumValue, SimpleDatumValue};
-use crate::error::{invalid_char_input, invalid_char_name, invalid_unicode_value, Error};
+use crate::error::{invalid_char_input, invalid_unicode_value, unknown_char_name, Error};
 use crate::lexer::token::Span;
 use std::fmt::Write;
 use std::iter::FusedIterator;
@@ -116,7 +116,7 @@ impl DatumValue for SChar {}
 
 impl SimpleDatumValue for SChar {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
-        let _span = ::tracing::trace_span!("from_str_in_span");
+        let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
         trace!("SChar? {:?}", s);
@@ -142,22 +142,23 @@ impl SimpleDatumValue for SChar {
                 Ok(SChar::from('\u{09}'))
             } else if s.starts_with('x') && s.ends_with(';') {
                 let s = &s[1..s.len() - 1];
-                let cp = u32::from_str_radix(s, 16).map_err(|_| invalid_unicode_value(span))?;
-                Ok(SChar::from(
-                    char::from_u32(cp).ok_or_else(|| invalid_unicode_value(span))?,
-                ))
+                let cp = u32::from_str_radix(s, 16)
+                    .map_err(|_| invalid_unicode_value::<Self>(span).unwrap_err())?;
+                Ok(SChar::from(char::from_u32(cp).ok_or_else(|| {
+                    invalid_unicode_value::<Self>(span).unwrap_err()
+                })?))
             } else {
                 let mut chars: Vec<char> = s.chars().collect();
                 if chars.len() == 1 {
                     Ok(Self::from(chars.remove(0)))
                 } else {
                     error!("Unknown char name in {s:?}");
-                    Err(invalid_char_name(s, span))
+                    unknown_char_name(span, s)
                 }
             }
         } else {
             error!("Char does not start with prefix '#\\'");
-            Err(invalid_char_input(span))
+            invalid_char_input(span)
         }
     }
 }
@@ -172,8 +173,8 @@ impl SChar {
             '\r' => EscapeDefaultState::Backslash('r'),
             '\n' => EscapeDefaultState::Backslash('n'),
             '\"' | '\\' | '|' => EscapeDefaultState::Backslash(self.0),
-            '\x20'..='\x7e' => EscapeDefaultState::Char(self.0),
-            _ => EscapeDefaultState::Unicode(self.escape_unicode()),
+            _ if self.is_non_printing() => EscapeDefaultState::Unicode(self.escape_unicode()),
+            _ => EscapeDefaultState::Char(self.0),
         };
         EscapeDefault { state: init_state }
     }
