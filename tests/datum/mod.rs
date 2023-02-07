@@ -26,7 +26,7 @@ macro_rules! success_case {
         fn $test_name() {
             let _guard = crate::init_tracing();
 
-            use std::str::FromStr;
+            use ::std::str::FromStr;
             let result = <$kind>::from_str($input);
 
             match result {
@@ -66,6 +66,8 @@ macro_rules! failure_case {
 
 pub mod booleans;
 pub mod chars;
+pub mod directives;
 pub mod identifiers;
+pub mod lists;
 pub mod numbers;
 pub mod strings;

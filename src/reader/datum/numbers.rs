@@ -12,12 +12,13 @@ YYYYY
 
 use crate::error::{invalid_numeric_input, Error};
 use crate::lexer::token::Span;
-use crate::reader::datum::{Datum, DatumValue, SimpleDatumValue};
+use crate::reader::datum::{Datum, SimpleDatumValue};
 use num_bigint::BigInt;
 use num_complex::{Complex64, ComplexFloat};
 use num_rational::{BigRational, Ratio};
 use num_traits::Zero;
 use std::fmt::{Binary, Debug, LowerHex, Octal, UpperHex};
+use std::ops::Deref;
 use std::{fmt::Display, str::FromStr};
 use tracing::{error, trace};
 
@@ -98,34 +99,8 @@ pub enum Radix {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Public Functions
+// Private Macros
 // ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Private Types
-// ------------------------------------------------------------------------------------------------
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum ParseState {
-    Start,
-    InPrefix,
-    InSign,
-    InInteger,
-    InFractional,
-    InExponent,
-    InRational,
-    InComplex,
-}
-
-#[allow(unused)]
-#[derive(Clone, Debug, PartialEq)]
-enum ParseResult {
-    Fixnum,
-    Flonum,
-    Ratnum(Fixnum),
-    ExComplexnum(Ratnum),
-    Complexnum(Flonum),
-}
 
 macro_rules! number_impl {
     ($number:ident, $inner_type:ty) => {
@@ -152,13 +127,12 @@ macro_rules! number_impl {
                 Self::Number(SNumber::$number(v))
             }
         }
-    };
-}
 
-macro_rules! change_state {
-    ($current:expr => $state:ident) => {
-        trace!("change state {:?} => {:?}", $current, ParseState::$state,);
-        $current = ParseState::$state;
+        impl From<$inner_type> for Datum {
+            fn from(v: $inner_type) -> Self {
+                Self::Number($number::from(v).into())
+            }
+        }
     };
 }
 
@@ -175,7 +149,52 @@ macro_rules! fixnum_from {
                 Self(BigInt::from(v))
             }
         }
+
+        impl From<$unsigned> for Datum {
+            fn from(v: $unsigned) -> Self {
+                Self::Number(Fixnum(BigInt::from(v)).into())
+            }
+        }
+
+        impl From<$signed> for Datum {
+            fn from(v: $signed) -> Self {
+                Self::Number(Fixnum(BigInt::from(v)).into())
+            }
+        }
     };
+}
+
+macro_rules! change_state {
+    ($current:expr => $state:ident) => {
+        trace!("change state {:?} => {:?}", $current, ParseState::$state,);
+        $current = ParseState::$state;
+    };
+}
+
+// ------------------------------------------------------------------------------------------------
+// Private Types
+// ------------------------------------------------------------------------------------------------
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ParseState {
+    Start,
+    InPrefix,
+    InSign,
+    InInteger,
+    InFractional,
+    InExponent,
+    InRational,
+    InComplex,
+}
+
+#[allow(unused)]
+#[derive(Clone, Debug, PartialEq)]
+enum ParseResult {
+    Fixnum,
+    Flonum,
+    Ratnum(Fixnum),
+    ExComplexnum(Ratnum),
+    Complexnum(Flonum),
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -338,6 +357,14 @@ impl UpperHex for Fixnum {
     }
 }
 
+impl Deref for Fixnum {
+    type Target = BigInt;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 fixnum_from!(u8, i8);
 fixnum_from!(u16, i16);
 fixnum_from!(u32, i32);
@@ -364,6 +391,30 @@ impl Display for Ratnum {
 impl Debug for Ratnum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "#e{}/{}", self.0.numer(), self.0.denom())
+    }
+}
+
+impl Binary for Ratnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#b{:b}/{:b}", self.0.numer(), self.0.denom())
+    }
+}
+
+impl Octal for Ratnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#o{:o}/{:o}", self.0.numer(), self.0.denom())
+    }
+}
+
+impl LowerHex for Ratnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#x{:x}/{:x}", self.0.numer(), self.0.denom())
+    }
+}
+
+impl UpperHex for Ratnum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#x{:X}/{:X}", self.0.numer(), self.0.denom())
     }
 }
 
@@ -510,21 +561,9 @@ impl Debug for SNumber {
     }
 }
 
-impl From<SNumber> for Datum {
-    fn from(v: SNumber) -> Self {
-        Self::Number(v)
-    }
-}
+impl_datum_value!(Number, SNumber);
 
-impl FromStr for SNumber {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_str_in_span(s, Span::new_char_span_from(s))
-    }
-}
-
-impl DatumValue for SNumber {}
+impl_simple_datum_from_str!(Number, SNumber);
 
 impl SimpleDatumValue for SNumber {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
@@ -670,57 +709,28 @@ impl SNumber {
         !self.is_exact()
     }
 
-    pub fn is_fixnum(&self) -> bool {
-        matches!(self, Self::Fixnum(_))
-    }
+    is_as_variant!(
+        (fixnum, Fixnum, Fixnum),
+        (flonum, Flonum, Flonum),
+        (ratnum, Ratnum, Ratnum),
+        (complexnum, Complexnum, Complexnum)
+    );
 
-    pub fn as_fixnum(&self) -> Option<&Fixnum> {
-        match self {
-            Self::Fixnum(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub fn is_flonum(&self) -> bool {
-        matches!(self, Self::Flonum(_))
-    }
-
-    pub fn as_flonum(&self) -> Option<&Flonum> {
-        match self {
-            Self::Flonum(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub fn is_ratnum(&self) -> bool {
-        matches!(self, Self::Ratnum(_))
-    }
-
-    pub fn as_ratnum(&self) -> Option<&Ratnum> {
-        match self {
-            Self::Ratnum(v) => Some(v),
-            _ => None,
-        }
-    }
-
-    pub fn is_complexnum(&self) -> bool {
-        matches!(self, Self::Complexnum(_))
-    }
-
-    pub fn as_complexnum(&self) -> Option<&Complexnum> {
-        match self {
-            Self::Complexnum(v) => Some(v),
-            _ => None,
-        }
-    }
+    into_variant!(
+        (fixnum, Fixnum, Fixnum),
+        (flonum, Flonum, Flonum),
+        (ratnum, Ratnum, Ratnum),
+        (complexnum, Complexnum, Complexnum)
+    );
 
     pub fn type_string(&self) -> &'static str {
-        match self {
-            Self::Fixnum(_) => "fixnum",
-            Self::Ratnum(_) => "ratnum",
-            Self::Flonum(_) => "flonum",
-            Self::Complexnum(_) => "complexnum",
-        }
+        match_into_str!(
+            self,
+            (Self::Fixnum(_) => "fixnum"),
+            (Self::Ratnum(_) => "ratnum"),
+            (Self::Flonum(_) => "flonum"),
+            (Self::Complexnum(_) => "complexnum")
+        )
     }
 }
 

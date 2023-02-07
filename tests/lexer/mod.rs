@@ -6,7 +6,7 @@ macro_rules! assert_complete {
 
 macro_rules! inner_success_fn {
     ($test_name:ident, $input:expr => $( ($kind:ident, $expected:expr) ),* ) => {
-        paste! {
+        ::paste::paste! {
             #[test]
             fn $test_name() {
                 let _guard = crate::init_tracing();
@@ -39,7 +39,7 @@ macro_rules! success_case {
     };
     ($test_name:ident, $input:expr => $( ($kind:ident, $expected:expr) ),* ) => {
         inner_success_fn!($test_name, $input => $( ($kind, $expected) ),*);
-        paste! {
+        ::paste::paste! {
             inner_success_fn!(
                 [<$test_name _with_whitespace>],
                 format!(" {} ", $input)

@@ -50,6 +50,7 @@ pub(crate) enum State {
     InCharacterXNum,
     InLineComment,
     InBlockComment,
+    InBlockCommentBar,
     InOpenByteVector(char),
     InDatumRef,
 }

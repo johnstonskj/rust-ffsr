@@ -9,12 +9,13 @@ YYYYY
 
 */
 
-use super::{Datum, DatumValue, SimpleDatumValue};
-use crate::{error::Error, lexer::token::Span};
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
+use super::{Datum, SimpleDatumValue};
+use crate::{
+    error::Error,
+    lexer::token::Span,
+    syntax::{COMMENT_BLOCK_END, COMMENT_BLOCK_START, COMMENT_DATUM_START, COMMENT_LINE_START},
 };
+use std::fmt::{Debug, Display};
 use tracing::{error, trace};
 
 // ------------------------------------------------------------------------------------------------
@@ -50,9 +51,9 @@ impl Display for SComment {
             f,
             "{}",
             match self {
-                SComment::Datum(v) => format!("#; {}", v),
-                SComment::Block(v) => format!("#| {} |#", v),
-                SComment::Line(v) => format!("; {}", v),
+                SComment::Datum(v) => format!("{COMMENT_DATUM_START} {v}"),
+                SComment::Block(v) => format!("{COMMENT_BLOCK_START} {v} {COMMENT_BLOCK_END}"),
+                SComment::Line(v) => format!("{COMMENT_LINE_START} {v}"),
             }
         )
     }
@@ -64,34 +65,22 @@ impl From<Datum> for SComment {
     }
 }
 
-impl From<SComment> for Datum {
-    fn from(v: SComment) -> Self {
-        Self::Comment(v)
-    }
-}
+impl_datum_value!(Comment, SComment);
 
-impl FromStr for SComment {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_str_in_span(s, Span::new_char_span_from(s))
-    }
-}
-
-impl DatumValue for SComment {}
+impl_simple_datum_from_str!(Comment, SComment);
 
 impl SimpleDatumValue for SComment {
     fn from_str_in_span(s: &str, span: crate::lexer::token::Span) -> Result<Self, Error> {
         let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
-        if s.starts_with(';') && !s.contains('\n') {
+        if s.starts_with(COMMENT_LINE_START) && !s.contains('\n') {
             trace!("line comment");
             Ok(Self::Line(s[1..].trim().to_string()))
-        } else if s.starts_with("#|") && s.ends_with("|#") {
+        } else if s.starts_with(COMMENT_BLOCK_START) && s.ends_with(COMMENT_BLOCK_END) {
             trace!("Block comment");
             Ok(Self::Block(s[2..s.len() - 2].trim().to_string()))
-        } else if s.starts_with("#;") {
+        } else if s.starts_with(COMMENT_DATUM_START) {
             trace!("Datum comment");
             unimplemented!()
         } else {

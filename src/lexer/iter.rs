@@ -18,6 +18,10 @@ use crate::input::indices::CharIndex;
 use crate::input::iter::CharIndices;
 use crate::lexer::internals::{IteratorState, State};
 use crate::lexer::token::{Span, Token, TokenKind};
+use crate::syntax::{
+    IDENTIFIER_WRAPPER, PAIR_END, PAIR_START, QUASI_QUOTE_ABBREV, QUOTE_ABBREV, STRING_QUOTE,
+    UNQUOTE_ABBREV, UNQUOTE_SPLICING_ABBREV,
+};
 use crate::{SourceId, Sourced};
 use tracing::{error, trace, trace_span};
 use unicode_categories::UnicodeCategories;
@@ -211,7 +215,7 @@ impl Iterator for TokenIter<'_> {
         let mut number_radix: u32 = 10;
 
         while let Some(char_index) = self.next_char() {
-            trace!("match ({:?}, {:?})", current_state, char_index);
+            trace!(?current_state, ?char_index, "match");
 
             last_char_index = char_index;
 
@@ -227,26 +231,26 @@ impl Iterator for TokenIter<'_> {
                 }
                 // --------------------------------------------------------------------------------
                 // Single character (mostly) tokens
-                (State::Nothing | State::InWhitespace, '(') => {
+                (State::Nothing | State::InWhitespace, PAIR_START) => {
                     current_state.set_token_start(&char_index);
                     return_token_and_add_char!(current_state, char_index, OpenParenthesis => Nothing);
                 }
-                (State::Nothing | State::InWhitespace, ')') => {
+                (State::Nothing | State::InWhitespace, PAIR_END) => {
                     current_state.set_token_start(&char_index);
                     return_token_and_add_char!(current_state, char_index, CloseParenthesis => Nothing);
                 }
-                (State::Nothing | State::InWhitespace, '\'') => {
+                (State::Nothing | State::InWhitespace, QUOTE_ABBREV) => {
                     current_state.set_token_start(&char_index);
                     return_token_and_add_char!(current_state, char_index, Quote => Nothing);
                 }
-                (State::Nothing | State::InWhitespace, '`') => {
+                (State::Nothing | State::InWhitespace, QUASI_QUOTE_ABBREV) => {
                     current_state.set_token_start(&char_index);
                     return_token_and_add_char!(current_state, char_index, QuasiQuote => Nothing);
                 }
-                (State::Nothing | State::InWhitespace, ',') => {
+                (State::Nothing | State::InWhitespace, UNQUOTE_ABBREV) => {
                     current_state.set_token_start(&char_index);
                     if let Some(next_char) = self.peek_next_char() {
-                        if next_char == &'@' {
+                        if next_char == &UNQUOTE_SPLICING_ABBREV {
                             let next_char = self.next_char().unwrap();
                             return_token_and_add_char!(
                                 current_state,
@@ -256,6 +260,11 @@ impl Iterator for TokenIter<'_> {
                         }
                     }
                     return_token_and_add_char!(current_state, char_index, Unquote => Nothing);
+                }
+                // --------------------------------------------------------------------------------
+                // Start of special forms
+                (State::Nothing | State::InWhitespace | State::InNumber, '#') => {
+                    state_change_at!(char_index, current_state => InSpecial);
                 }
                 // --------------------------------------------------------------------------------
                 // These are ambiguous
@@ -301,7 +310,7 @@ impl Iterator for TokenIter<'_> {
                 }
                 // --------------------------------------------------------------------------------
                 // Identifier values
-                (State::Nothing | State::InWhitespace, '|') => {
+                (State::Nothing | State::InWhitespace, IDENTIFIER_WRAPPER) => {
                     state_change_at!(char_index, current_state => InVBarIdentifier);
                 }
                 (State::Nothing | State::InWhitespace, c) if is_identifier_initial(c) => {
@@ -312,7 +321,7 @@ impl Iterator for TokenIter<'_> {
                     self.push_back_char(char_index);
                     return_token!(current_state, char_index, Identifier => Nothing);
                 }
-                (State::InVBarIdentifier, '|') => {
+                (State::InVBarIdentifier, IDENTIFIER_WRAPPER) => {
                     return_token_and_add_char!(current_state, char_index, Identifier => Nothing);
                 }
                 (State::InVBarIdentifier, '\\') => {
@@ -324,24 +333,18 @@ impl Iterator for TokenIter<'_> {
                 }
                 // --------------------------------------------------------------------------------
                 // String values
-                (State::Nothing | State::InWhitespace, '"') => {
+                (State::Nothing | State::InWhitespace, STRING_QUOTE) => {
                     state_change_at!(char_index, current_state => InString);
                 }
                 (State::InString, '\\') => {
                     state_change!(current_state => InStringEscape);
                 }
-                (State::InString, '"') => {
+                (State::InString, STRING_QUOTE) => {
                     return_token_and_add_char!(current_state, char_index, String => Nothing);
                 }
                 (State::InString, _) => {}
                 (State::InStringEscape, _) => {
                     state_change!(current_state => InString);
-                }
-                // +inf.0 -inf.0 +nan.0 -nan.0
-                // --------------------------------------------------------------------------------
-                // Start of special forms
-                (State::Nothing | State::InWhitespace | State::InNumber, '#') => {
-                    state_change_at!(char_index, current_state => InSpecial);
                 }
                 // --------------------------------------------------------------------------------
                 // Boolean values
@@ -352,21 +355,34 @@ impl Iterator for TokenIter<'_> {
                     return_token_and_add_char!(current_state, char_index, Boolean => Nothing);
                 }
                 // --------------------------------------------------------------------------------
-                // Vector values
-                (State::InSpecial, '(') => {
-                    return_token_and_add_char!(current_state, char_index, OpenVector => Nothing);
+                // Character values
+                (State::InSpecial, '\\') => {
+                    state_change!(current_state => InCharacter);
                 }
-                (State::InSpecial, 'u') => {
-                    state_change!(current_state => State::InOpenByteVector('u'));
+                (State::InCharacter, 'x') => {
+                    state_change!(current_state => InCharacterX);
                 }
-                (State::InOpenByteVector('u'), '8') => {
-                    state_change!(current_state => State::InOpenByteVector('8'));
+                (State::InCharacter, c) if c.is_ascii_alphabetic() || c == '-' => {
+                    state_change!(current_state => State::InCharacterName);
                 }
-                (State::InOpenByteVector('8'), '(') => {
-                    return_token_and_add_char!(current_state, char_index, OpenByteVector => Nothing);
+                (State::InCharacter, _) => {
+                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
                 }
-                (State::InOpenByteVector(_), _) => {
-                    return_error!(current_state, char_index, invalid_byte_vector_prefix);
+                (State::InCharacterName, c) if c.is_ascii_alphabetic() || c == '-' => {}
+                (State::InCharacterName, _) => {
+                    self.push_back_char(char_index);
+                    return_token!(current_state, char_index, Character => Nothing);
+                }
+                (State::InCharacterX, c) if c.is_ascii_hexdigit() => {
+                    state_change!(current_state => InCharacterXNum);
+                }
+                (State::InCharacterX, _) => {
+                    self.push_back_char(char_index);
+                    return_token!(current_state, char_index, Character => Nothing);
+                }
+                (State::InCharacterXNum, c) if c.is_ascii_hexdigit() => {}
+                (State::InCharacterXNum, ';') => {
+                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
                 }
                 // --------------------------------------------------------------------------------
                 // Numeric values
@@ -442,34 +458,21 @@ impl Iterator for TokenIter<'_> {
                 }
                 (State::InNumberPrefix, '#') => {}
                 // --------------------------------------------------------------------------------
-                // Character values
-                (State::InSpecial, '\\') => {
-                    state_change!(current_state => InCharacter);
+                // Vector values
+                (State::InSpecial, '(') => {
+                    return_token_and_add_char!(current_state, char_index, OpenVector => Nothing);
                 }
-                (State::InCharacter, 'x') => {
-                    state_change!(current_state => InCharacterX);
+                (State::InSpecial, 'u') => {
+                    state_change!(current_state => State::InOpenByteVector('u'));
                 }
-                (State::InCharacter, c) if c.is_ascii_alphabetic() || c == '-' => {
-                    state_change!(current_state => State::InCharacterName);
+                (State::InOpenByteVector('u'), '8') => {
+                    state_change!(current_state => State::InOpenByteVector('8'));
                 }
-                (State::InCharacter, _) => {
-                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
+                (State::InOpenByteVector('8'), '(') => {
+                    return_token_and_add_char!(current_state, char_index, OpenByteVector => Nothing);
                 }
-                (State::InCharacterName, c) if c.is_ascii_alphabetic() || c == '-' => {}
-                (State::InCharacterName, _) => {
-                    self.push_back_char(char_index);
-                    return_token!(current_state, char_index, Character => Nothing);
-                }
-                (State::InCharacterX, c) if c.is_ascii_hexdigit() => {
-                    state_change!(current_state => InCharacterXNum);
-                }
-                (State::InCharacterX, _) => {
-                    self.push_back_char(char_index);
-                    return_token!(current_state, char_index, Character => Nothing);
-                }
-                (State::InCharacterXNum, c) if c.is_ascii_hexdigit() => {}
-                (State::InCharacterXNum, ';') => {
-                    return_token_and_add_char!(current_state, char_index, Character => Nothing);
+                (State::InOpenByteVector(_), _) => {
+                    return_error!(current_state, char_index, invalid_byte_vector_prefix);
                 }
                 // --------------------------------------------------------------------------------
                 // Directives
@@ -515,6 +518,16 @@ impl Iterator for TokenIter<'_> {
                 (State::InSpecial, '|') => {
                     state_change!(current_state => InBlockComment);
                 }
+                (State::InBlockComment, '|') => {
+                    state_change!(current_state => InBlockCommentBar);
+                }
+                (State::InBlockCommentBar, '#') => {
+                    return_token_and_add_char!(current_state, char_index, BlockComment => Nothing);
+                }
+                (State::InBlockCommentBar, _) => {
+                    state_change!(current_state => InBlockComment);
+                }
+                (State::InBlockComment, _) => {}
                 (State::InSpecial, ';') => {
                     return_token_and_add_char!(current_state, char_index, DatumComment => Nothing);
                 }

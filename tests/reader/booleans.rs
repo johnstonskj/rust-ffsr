@@ -1,5 +1,4 @@
 use ffsr::reader::datum::SBoolean;
-use paste::paste;
 
 // ------------------------------------------------------------------------------------------------
 // Single-valued success cases

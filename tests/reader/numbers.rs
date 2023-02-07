@@ -1,5 +1,4 @@
 use ffsr::reader::datum::{Fixnum, SNumber};
-use paste::paste;
 
 // ------------------------------------------------------------------------------------------------
 // Single-valued success cases

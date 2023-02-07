@@ -9,32 +9,26 @@ YYYYY
 
 */
 
+use crate::error::Error;
 use crate::lexer::token::Span;
-use crate::reader::datum::Datum;
-
-// ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
+use crate::reader::datum::{Datum, SByteVector, SList, SVector};
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
-#[derive(Clone, Debug)]
-pub(crate) struct IteratorState {
-    state: State,
-    content: Option<Vec<Datum>>,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Debug, Default)]
 pub(crate) enum State {
+    #[default]
     TopLevel,
-    Quote(QuoteKind, Span),
+    Quote(Span, QuoteKind),
     DatumComment(Span),
-    DatumAssign(u16),
-    List(Span),
-    Vector(Span),
-    ByteVector(Span),
+    DatumAssign(Span, u16),
+    List(Span, SList),
+    Dot(Span, Option<Datum>),
+    Vector(Span, SVector),
+    ByteVector(Span, SByteVector),
+    FastForward(Error),
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -46,69 +40,39 @@ pub(crate) enum QuoteKind {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Public Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Private Types
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
 // Implementations
 // ------------------------------------------------------------------------------------------------
 
-impl Default for IteratorState {
-    fn default() -> Self {
-        Self::new(State::TopLevel)
-    }
-}
-
-impl From<State> for IteratorState {
-    fn from(v: State) -> Self {
-        Self::new(v)
-    }
-}
-
-impl IteratorState {
+impl State {
     #[inline(always)]
-    pub(crate) fn new(state: State) -> Self {
-        Self {
-            state,
-            content: match state {
-                State::List(_) | State::Vector(_) | State::ByteVector(_) => Some(Vec::default()),
-                _ => Default::default(),
-            },
+    pub(crate) fn into_list(self) -> SList {
+        match self {
+            State::List(_, list) => list,
+            _ => panic!(),
         }
     }
 
     #[inline(always)]
-    pub(crate) fn state(&self) -> State {
-        self.state
-    }
-
-    #[inline(always)]
-    pub(crate) fn add_content(&mut self, datum: Datum) {
-        if let Some(content) = self.content.as_mut() {
-            content.push(datum);
-        } else {
-            panic!();
+    pub(crate) fn into_vector(self) -> SVector {
+        match self {
+            State::Vector(_, vector) => vector,
+            _ => panic!(),
         }
     }
 
     #[inline(always)]
-    pub(crate) fn into_content(self) -> Vec<Datum> {
-        if let Some(content) = self.content {
-            content
-        } else {
-            panic!();
+    pub(crate) fn into_byte_vector(self) -> SByteVector {
+        match self {
+            State::ByteVector(_, byte_vector) => byte_vector,
+            _ => panic!(),
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn into_error(self) -> Error {
+        match self {
+            State::FastForward(err) => err,
+            _ => panic!(),
         }
     }
 }
-
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------

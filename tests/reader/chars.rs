@@ -1,5 +1,4 @@
 use ffsr::reader::datum::SChar;
-use paste::paste;
 
 // ------------------------------------------------------------------------------------------------
 // Single-valued success cases

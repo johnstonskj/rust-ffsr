@@ -9,15 +9,14 @@ YYYYY
 
 */
 
-use super::{Datum, DatumValue, SChar, SimpleDatumValue};
+use super::{SChar, SimpleDatumValue};
 use crate::{
     error::{invalid_string_input, invalid_unicode_value, Error},
     lexer::token::Span,
+    syntax::STRING_QUOTE,
 };
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::fmt::{Debug, Display};
+use std::str::FromStr;
 use tracing::trace;
 
 // ------------------------------------------------------------------------------------------------
@@ -79,21 +78,15 @@ impl Display for SString {
 
 impl Debug for SString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.escape_default_string())
+        write!(
+            f,
+            "{STRING_QUOTE}{}{STRING_QUOTE}",
+            self.escape_default_string()
+        )
     }
 }
 
-impl From<SString> for String {
-    fn from(s: SString) -> Self {
-        s.0
-    }
-}
-
-impl From<SString> for Datum {
-    fn from(v: SString) -> Self {
-        Self::String(v)
-    }
-}
+impl_datum_value!(String, SString, String);
 
 impl AsRef<str> for SString {
     fn as_ref(&self) -> &str {
@@ -101,24 +94,14 @@ impl AsRef<str> for SString {
     }
 }
 
-impl FromStr for SString {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        // TODO: calculate the span end in from_str_in_span?
-        // or another way to save scanning the entire string twice
-        Self::from_str_in_span(s, Span::new_char_span_from(s))
-    }
-}
-
-impl DatumValue for SString {}
+impl_simple_datum_from_str!(String, SString);
 
 impl SimpleDatumValue for SString {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
         let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
-        let s = if s.starts_with('"') && s.ends_with('"') {
+        let s = if s.starts_with(STRING_QUOTE) && s.ends_with(STRING_QUOTE) {
             &s[1..s.len() - 1]
         } else {
             s

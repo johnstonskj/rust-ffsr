@@ -1,9 +1,9 @@
-use ffsr::error::Error;
 use ffsr::input::input_from_stdin;
 use ffsr::lexer::Lexer;
 use ffsr::reader::Reader;
 use ffsr::Sourced;
-use std::fmt::Display;
+use ffsr::{error::Error, input::input_from_file};
+use std::{fmt::Display, path::PathBuf};
 use structopt::StructOpt;
 use tracing::info;
 use tracing::subscriber::SetGlobalDefaultError;
@@ -21,6 +21,9 @@ struct Cli {
     /// The level of logging to perform, from off to trace
     #[structopt(long, short = "v", parse(from_occurrences))]
     verbose: i8,
+
+    #[structopt(long, short)]
+    file: Option<PathBuf>,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -75,15 +78,22 @@ fn main() -> Result<(), ToolError> {
     let args = Cli::from_args();
 
     init_tracing(args.verbose)?;
-    println!("Type some input, put ^D on a blank line to execute");
 
-    let input = input_from_stdin()?;
+    let input = match args.file {
+        None => {
+            println!("Type some input, put ^D on a blank line to execute");
+            input_from_stdin()?
+        }
+        Some(file) => input_from_file(file)?,
+    };
+
     let reader = Reader::from(Lexer::from(input));
 
     for datum in reader.iter() {
         match datum {
             Ok(datum) => {
-                println!("{}: {:?}", datum.type_string(), datum);
+                println!("{}: {}", datum.type_string(), datum);
+                println!("{}: {:#?}", datum.type_string(), datum);
             }
             Err(e) => {
                 e.print(reader.source_str());

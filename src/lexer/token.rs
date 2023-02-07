@@ -78,6 +78,12 @@ impl Default for Span {
     }
 }
 
+impl Display for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.as_range())
+    }
+}
+
 impl From<usize> for Span {
     fn from(v: usize) -> Self {
         Self::new(v, v)
@@ -222,139 +228,56 @@ impl Token {
         self.character_span.end
     }
 
-    #[inline(always)]
-    pub fn is_open_parenthesis(&self) -> bool {
-        matches!(&self.kind, TokenKind::OpenParenthesis)
-    }
-
-    #[inline(always)]
-    pub fn is_close_parenthesis(&self) -> bool {
-        matches!(&self.kind, TokenKind::CloseParenthesis)
-    }
-
-    #[inline(always)]
-    pub fn is_quote(&self) -> bool {
-        matches!(&self.kind, TokenKind::Quote)
-    }
-
-    #[inline(always)]
-    pub fn is_quasi_quote(&self) -> bool {
-        matches!(&self.kind, TokenKind::QuasiQuote)
-    }
-
-    #[inline(always)]
-    pub fn is_unquote(&self) -> bool {
-        matches!(&self.kind, TokenKind::Unquote)
-    }
-
-    #[inline(always)]
-    pub fn is_unquote_splicing(&self) -> bool {
-        matches!(&self.kind, TokenKind::UnquoteSplicing)
-    }
-
-    #[inline(always)]
-    pub fn is_dot(&self) -> bool {
-        matches!(&self.kind, TokenKind::Dot)
-    }
-
-    #[inline(always)]
-    pub fn is_open_vector(&self) -> bool {
-        matches!(&self.kind, TokenKind::OpenVector)
-    }
-
-    #[inline(always)]
-    pub fn is_open_byte_vector(&self) -> bool {
-        matches!(&self.kind, TokenKind::OpenByteVector)
-    }
-
-    #[inline(always)]
-    pub fn is_identifier(&self) -> bool {
-        matches!(&self.kind, TokenKind::Identifier)
-    }
-
-    #[inline(always)]
-    pub fn is_character(&self) -> bool {
-        matches!(&self.kind, TokenKind::Character)
-    }
-
-    #[inline(always)]
-    pub fn is_string(&self) -> bool {
-        matches!(&self.kind, TokenKind::String)
-    }
-
-    #[inline(always)]
-    pub fn is_number(&self) -> bool {
-        matches!(&self.kind, TokenKind::Number)
-    }
-
-    #[inline(always)]
-    pub fn is_boolean(&self) -> bool {
-        matches!(&self.kind, TokenKind::Boolean)
-    }
-
-    #[inline(always)]
-    pub fn is_line_comment(&self) -> bool {
-        matches!(&self.kind, TokenKind::LineComment)
-    }
-
-    #[inline(always)]
-    pub fn is_block_comment(&self) -> bool {
-        matches!(&self.kind, TokenKind::BlockComment)
-    }
-
-    #[inline(always)]
-    pub fn is_datum_comment(&self) -> bool {
-        matches!(&self.kind, TokenKind::DatumComment)
-    }
-
-    #[inline(always)]
-    pub fn is_datum_assignment(&self) -> bool {
-        matches!(&self.kind, TokenKind::DatumAssign)
-    }
-
-    #[inline(always)]
-    pub fn is_datum_reference(&self) -> bool {
-        matches!(&self.kind, TokenKind::DatumRef)
-    }
-
-    #[inline(always)]
-    pub fn is_directive(&self) -> bool {
-        matches!(&self.kind, TokenKind::Directive)
-    }
+    is_variant!(
+        kind,
+        (open_parenthesis, TokenKind::OpenParenthesis),
+        (close_parenthesis, TokenKind::CloseParenthesis),
+        (quote, TokenKind::Quote),
+        (quasi_quote, TokenKind::QuasiQuote),
+        (unquote, TokenKind::Unquote),
+        (unquote_splicing, TokenKind::UnquoteSplicing),
+        (dot, TokenKind::Dot),
+        (open_vector, TokenKind::OpenVector),
+        (open_byte_vector, TokenKind::OpenByteVector),
+        (identifier, TokenKind::Identifier),
+        (character, TokenKind::Character),
+        (string, TokenKind::String),
+        (number, TokenKind::Number),
+        (boolean, TokenKind::Boolean),
+        (line_comment, TokenKind::LineComment),
+        (block_comment, TokenKind::BlockComment),
+        (datum_comment, TokenKind::DatumComment),
+        (datum_assignment, TokenKind::DatumAssign),
+        (datum_reference, TokenKind::DatumRef),
+        (directive, TokenKind::Directive)
+    );
 }
 
 // ------------------------------------------------------------------------------------------------
 
-impl Display for TokenKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                Self::OpenParenthesis => "list start",
-                Self::CloseParenthesis => "list end",
-                Self::Quote => "quote",
-                Self::QuasiQuote => "quasiquote",
-                Self::Unquote => "unquote",
-                Self::UnquoteSplicing => "unquote-splicing",
-                Self::Dot => "dot",
-                Self::OpenVector => "vector start",
-                Self::OpenByteVector => "byte-vector start",
-                Self::Identifier => "identifier",
-                Self::Character => "character",
-                Self::String => "string",
-                Self::Number => "number",
-                Self::Boolean => "boolean",
-                Self::LineComment => "line comment[",
-                Self::BlockComment => "block comment",
-                Self::DatumComment => "datum comment",
-                Self::DatumAssign => "datum assignment",
-                Self::DatumRef => "datum reference",
-                Self::Directive => "directive",
-            }
-        )
-    }
-}
+impl_display_into_str!(
+    TokenKind,
+    (TokenKind::OpenParenthesis => "list start"),
+    (TokenKind::CloseParenthesis => "list end"),
+    (TokenKind::Quote => "quote"),
+    (TokenKind::QuasiQuote => "quasiquote"),
+    (TokenKind::Unquote => "unquote"),
+    (TokenKind::UnquoteSplicing => "unquote-splicing"),
+    (TokenKind::Dot => "dot"),
+    (TokenKind::OpenVector => "vector start"),
+    (TokenKind::OpenByteVector => "byte-vector start"),
+    (TokenKind::Identifier => "identifier"),
+    (TokenKind::Character => "character"),
+    (TokenKind::String => "string"),
+    (TokenKind::Number => "number"),
+    (TokenKind::Boolean => "boolean"),
+    (TokenKind::LineComment => "line comment"),
+    (TokenKind::BlockComment => "block comment"),
+    (TokenKind::DatumComment => "datum comment"),
+    (TokenKind::DatumAssign => "datum assignment"),
+    (TokenKind::DatumRef => "datum reference"),
+    (TokenKind::Directive => "directive")
+);
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

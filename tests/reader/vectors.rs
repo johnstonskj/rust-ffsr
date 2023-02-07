@@ -1,5 +1,4 @@
 use ffsr::reader::datum::{Datum, SChar, SIdentifier, SString, SVector};
-use paste::paste;
 use std::str::FromStr;
 
 // ------------------------------------------------------------------------------------------------

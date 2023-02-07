@@ -15,7 +15,8 @@ use crate::lexer::iter::{
 };
 use crate::lexer::token::Span;
 use crate::reader::datum::SChar;
-use crate::reader::datum::{Datum, DatumValue, SString, SimpleDatumValue};
+use crate::reader::datum::{SString, SimpleDatumValue};
+use crate::syntax::IDENTIFIER_WRAPPER;
 use std::fmt::Debug;
 use std::{fmt::Display, str::FromStr};
 use tracing::{error, trace};
@@ -87,17 +88,9 @@ impl Debug for SIdentifier {
     }
 }
 
-impl From<SIdentifier> for Datum {
-    fn from(v: SIdentifier) -> Self {
-        Self::Identifier(v)
-    }
-}
+impl_datum_value!(Identifier, SIdentifier, String);
 
-impl From<SIdentifier> for String {
-    fn from(v: SIdentifier) -> Self {
-        v.0
-    }
-}
+impl_simple_datum_from_str!(Identifier, SIdentifier);
 
 impl TryFrom<SIdentifier> for SString {
     type Error = Error;
@@ -121,22 +114,12 @@ impl AsRef<str> for SIdentifier {
     }
 }
 
-impl FromStr for SIdentifier {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_str_in_span(s, Span::new_char_span_from(s))
-    }
-}
-
-impl DatumValue for SIdentifier {}
-
 impl SimpleDatumValue for SIdentifier {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
         let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
-        let s = if s.starts_with('|') && s.ends_with('|') {
+        let s = if s.starts_with(IDENTIFIER_WRAPPER) && s.ends_with(IDENTIFIER_WRAPPER) {
             &s[1..s.len() - 1]
         } else {
             s
@@ -261,7 +244,9 @@ impl SimpleDatumValue for SIdentifier {
             error!("incomplete escape sequence, in {current_state:?}");
             incomplete_string(span)
         } else if requires_escape {
-            Ok(SIdentifier(format!("|{buffer}|")))
+            Ok(SIdentifier(format!(
+                "{IDENTIFIER_WRAPPER}{buffer}{IDENTIFIER_WRAPPER}"
+            )))
         } else {
             Ok(SIdentifier(buffer))
         }

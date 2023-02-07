@@ -9,8 +9,14 @@ YYYYY
 
 */
 
-use super::{Datum, DatumValue};
+use crate::error::{invalid_byte_input, Error};
+use crate::lexer::token::Span;
+use crate::reader::datum::{Datum, Fixnum};
+use crate::syntax::{BYTE_VECTOR_END, BYTE_VECTOR_START, VECTOR_END, VECTOR_START};
+use num_bigint::ToBigInt;
 use std::fmt::{Debug, Display};
+use std::ops::Deref;
+use tracing::error;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -25,7 +31,7 @@ use std::fmt::{Debug, Display};
 pub struct SVector(Vec<Datum>);
 
 #[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
-pub struct SByteVector(Vec<u8>);
+pub struct SByteVector(Vec<Fixnum>);
 
 // ------------------------------------------------------------------------------------------------
 // Public Functions
@@ -43,7 +49,7 @@ impl Display for SVector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "#({})",
+            "{VECTOR_START}{}{VECTOR_END}",
             self.0
                 .iter()
                 .map(|d| d.to_string())
@@ -57,21 +63,17 @@ impl Debug for SVector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "#({})",
+            "{VECTOR_START}{}{VECTOR_END}",
             self.0
                 .iter()
-                .map(|d| format!("{:?}", d))
+                .map(|d| format!("{d:?}"))
                 .collect::<Vec<String>>()
                 .join(" ")
         )
     }
 }
 
-impl From<SVector> for Datum {
-    fn from(v: SVector) -> Self {
-        Datum::Vector(v)
-    }
-}
+impl_datum_value!(Vector, SVector);
 
 impl From<Datum> for SVector {
     fn from(v: Datum) -> Self {
@@ -91,7 +93,11 @@ impl FromIterator<Datum> for SVector {
     }
 }
 
-impl DatumValue for SVector {}
+impl SVector {
+    pub fn append(&mut self, datum: Datum) {
+        self.0.push(datum)
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 
@@ -99,7 +105,7 @@ impl Display for SByteVector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "#({})",
+            "{BYTE_VECTOR_START}{}{BYTE_VECTOR_END}",
             self.0
                 .iter()
                 .map(|d| d.to_string())
@@ -113,7 +119,7 @@ impl Debug for SByteVector {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "#({})",
+            "{BYTE_VECTOR_START}{}{BYTE_VECTOR_END}",
             self.0
                 .iter()
                 .map(|d| format!("{:?}", d))
@@ -123,31 +129,63 @@ impl Debug for SByteVector {
     }
 }
 
-impl From<SByteVector> for Datum {
-    fn from(v: SByteVector) -> Self {
-        Datum::ByteVector(v)
-    }
-}
+impl_datum_value!(ByteVector, SByteVector);
 
-impl From<u8> for SByteVector {
-    fn from(v: u8) -> Self {
+impl From<Fixnum> for SByteVector {
+    fn from(v: Fixnum) -> Self {
         Self(vec![v])
     }
 }
 
-impl From<Vec<u8>> for SByteVector {
-    fn from(v: Vec<u8>) -> Self {
+impl From<Vec<Fixnum>> for SByteVector {
+    fn from(v: Vec<Fixnum>) -> Self {
         Self(v)
     }
 }
 
-impl FromIterator<u8> for SByteVector {
-    fn from_iter<T: IntoIterator<Item = u8>>(iter: T) -> Self {
+impl FromIterator<Fixnum> for SByteVector {
+    fn from_iter<T: IntoIterator<Item = Fixnum>>(iter: T) -> Self {
         Self(Vec::from_iter(iter))
     }
 }
 
-impl DatumValue for SByteVector {}
+impl SByteVector {
+    pub(crate) fn try_append_datum(&mut self, datum: Datum, span: Span) -> Result<(), Error> {
+        let number = if let Some(number) = datum.as_number() {
+            number
+        } else {
+            error!(
+                "Invalid datum type {}, expecting fixnum",
+                datum.type_string()
+            );
+            return invalid_byte_input(span);
+        };
+
+        if let Some(fixnum) = number.as_fixnum() {
+            self.try_append(fixnum.clone())
+        } else {
+            error!(
+                "Invalid numeric type {}, expecting fixnum",
+                number.type_string()
+            );
+            return invalid_byte_input(span);
+        }
+    }
+
+    pub fn try_append(&mut self, fixnum: Fixnum) -> Result<(), Error> {
+        if fixnum.deref() >= &0.to_bigint().unwrap() && fixnum.deref() <= &255.to_bigint().unwrap()
+        {
+            self.0.push(fixnum);
+        } else {
+            panic!("Not a valid fixnum value, #e0..#e255");
+        }
+        Ok(())
+    }
+
+    pub fn append(&mut self, byte: u8) {
+        self.0.push(byte.into());
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 // Private Functions

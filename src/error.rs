@@ -52,6 +52,10 @@ pub enum Error {
         span: Span,
         label: u16,
     },
+    IncompleteDatumAssignment {
+        span: Span,
+        label: u16,
+    },
     // --------------------------------------------------------------
     // Identifiers
     // --------------------------------------------------------------
@@ -112,9 +116,28 @@ pub enum Error {
         source: Option<Box<Error>>,
     },
     // --------------------------------------------------------------
-    // Lists
+    // Pairs & Lists
     // --------------------------------------------------------------
     IncompleteList {
+        span: Span,
+    },
+    IncompletePair {
+        span: Span,
+    },
+    PairMissingCar {
+        span: Span,
+    },
+    PairMissingCdr {
+        span: Span,
+    },
+    PairAdditionalCdr {
+        span: Span,
+    },
+    InvalidPairInput {
+        span: Span,
+        source: Option<Box<Error>>,
+    },
+    CannotAppendToImproperPair {
         span: Span,
     },
     // --------------------------------------------------------------
@@ -130,6 +153,9 @@ pub enum Error {
         span: Span,
     },
     IncompleteByteVector {
+        span: Span,
+    },
+    InvalidByteInput {
         span: Span,
     },
     // --------------------------------------------------------------
@@ -233,6 +259,12 @@ pub fn duplicate_datum_label<T>(span: Span, label: u16) -> Result<T> {
 #[inline]
 pub fn unknown_datum_label<T>(span: Span, label: u16) -> Result<T> {
     Err(Error::UnknownDatumLabel { span, label })
+}
+
+/// Construct an `IncompleteDatumAssignment` Error with the provided span.
+#[inline]
+pub fn incomplete_datum_assignment<T>(span: Span, label: u16) -> Result<T> {
+    Err(Error::IncompleteDatumAssignment { span, label })
 }
 
 // --------------------------------------------------------------
@@ -376,13 +408,58 @@ pub fn invalid_numeric_input<T>(span: Span) -> Result<T> {
 }
 
 // --------------------------------------------------------------
-// Lists
+// Pairs & Lists
 // --------------------------------------------------------------
 
 /// Construct an `IncompleteList` Error with the provided span.
 #[inline]
 pub fn incomplete_list<T>(span: Span) -> Result<T> {
     Err(Error::IncompleteList { span })
+}
+
+/// Construct an `IncompletePair` Error with the provided span.
+#[inline]
+pub fn incomplete_pair<T>(span: Span) -> Result<T> {
+    Err(Error::IncompletePair { span })
+}
+
+/// Construct an `PairMissingLeft` Error with the provided span.
+#[inline]
+pub fn pair_missing_car<T>(span: Span) -> Result<T> {
+    Err(Error::PairMissingCar { span })
+}
+
+/// Construct an `PairMissingRhs` Error with the provided span.
+#[inline]
+pub fn pair_missing_cdr<T>(span: Span) -> Result<T> {
+    Err(Error::PairMissingCdr { span })
+}
+
+/// Construct an `PairAdditionalRhs` Error with the provided span.
+#[inline]
+pub fn pair_too_many_cdr<T>(span: Span) -> Result<T> {
+    Err(Error::PairAdditionalCdr { span })
+}
+
+/// Construct an `InvalidPairInput` Error with the provided span.
+#[inline]
+pub fn invalid_pair_for<T>(span: Span, source: Error) -> Result<T> {
+    Err(Error::InvalidPairInput {
+        span,
+        source: Some(Box::from(source)),
+    })
+}
+
+/// Construct an `InvalidPairInput` Error with the provided span.
+#[inline]
+pub fn invalid_pair<T>(span: Span) -> Result<T> {
+    Err(Error::InvalidPairInput { span, source: None })
+}
+
+/// Construct an `CannotAppendToImproperPair` Error with the provided span.
+#[inline]
+pub fn cannot_append_to_improper_pair<T>(span: Span) -> Result<T> {
+    Err(Error::CannotAppendToImproperPair { span })
 }
 
 // --------------------------------------------------------------
@@ -409,6 +486,12 @@ pub fn invalid_byte_vector_prefix<T>(span: Span) -> Result<T> {
 #[inline]
 pub fn incomplete_byte_vector<T>(span: Span) -> Result<T> {
     Err(Error::IncompleteByteVector { span })
+}
+
+/// Construct an `InvalidByteInput` Error with the provided span.
+#[inline]
+pub fn invalid_byte_input<T>(span: Span) -> Result<T> {
+    Err(Error::InvalidByteInput { span })
 }
 
 // --------------------------------------------------------------
@@ -486,176 +569,164 @@ pub fn unexpected_token_within<T>(span: Span, token: TokenKind, within: Span) ->
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
-            f,
-            "{}",
-            match self {
-                Self::IoError { source } => format!("An I/O error occurred; source: {}", source),
-                // --------------------------------------------------------------
-                Self::IncompleteSpecial { span } =>
-                    format!("Incomplete special form, span: {:?}", span.as_range()),
-
-                Self::InvalidDirectiveInput { span } => format!(
-                    "Invalid, or badly formed, directive input; span: {:?}",
-                    span.as_range()
-                ),
-                // --------------------------------------------------------------
-                Self::UnknownDirectiveName { span, name } => format!(
-                    "The directive names {:?} is not known; span: {:?}",
-                    span.as_range(),
-                    name
-                ),
-                // --------------------------------------------------------------
-                Self::InvalidDatumLabel { span } => format!(
-                    "Invalid, or badly formed, datum label assignment or reference; span: {:?}",
-                    span.as_range()
-                ),
-                Self::DuplicateDatumLabel { span, label } => format!(
-                    "The label `{}` has already been defined; span: {:?}",
-                    label, span
-                ),
-                Self::UnknownDatumLabel { span, label } => format!(
-                    "The label `{}` referenced has not been defined; span: {:?}",
-                    label, span
-                ),
-                // --------------------------------------------------------------
-                Self::IncompleteIdentifier { span } => format!(
-                    "Incomplete identifier, expecting a terminating `#\\|`; span: {:?}",
-                    span.as_range()
-                ),
-                Self::InvalidIdentifierMnemonicEscape { span } => format!(
-                    "Invalid mnemonic escape in identifier; span: {:?}",
-                    span.as_range()
-                ),
-                Self::InvalidIdentifierHexEscape { span } => format!(
-                    "Invalid hex escape in identifier span: {:?}",
-                    span.as_range()
-                ),
-                Self::InvalidIdentifierInput { span, source } => format!(
-                    "Invalid, or badly formed, identifier input; span: {:?}{}",
-                    span.as_range(),
-                    if let Some(source) = source {
-                        format!(". Based on: {}.", source)
-                    } else {
-                        String::new()
-                    }
-                ),
-                // --------------------------------------------------------------
-                Self::InvalidBooleanInput { span } => format!(
-                    "Invalid, or badly formed, boolean input; span: {:?}",
-                    span.as_range()
-                ),
-                // --------------------------------------------------------------
-                Self::UnknownCharName { span, name } => format!(
-                    "Unknown character name {:?}; span: {:?}",
-                    name,
-                    span.as_range()
-                ),
-                Self::InvalidUnicodeValue { span } => format!(
-                    "Could not convert to a valid Unicode codepoint; span: {:?}",
-                    span.as_range()
-                ),
-                Self::InvalidCharInput { span, source } => format!(
-                    "Invalid, or badly formed, character input; span: {:?}{}",
-                    span.as_range(),
-                    if let Some(source) = source {
-                        format!(". Based on: {}.", source)
-                    } else {
-                        String::new()
-                    }
-                ),
-                // --------------------------------------------------------------
-                Self::IncompleteString { span } => format!(
-                    "Incomplete string, expecting a terminating `#\\\"`; span: {:?}",
-                    span.as_range()
-                ),
-                Self::InvalidStringMnemonicEscape { span } => format!(
-                    "Invalid mnemonic escape in string; span: {:?}",
-                    span.as_range()
-                ),
-                Self::InvalidStringHexEscape { span } =>
-                    format!("Invalid hex escape in string span: {:?}", span.as_range()),
-                Self::InvalidStringInput { span, source } => format!(
-                    "Invalid, or badly formed, string input; span: {:?}{}",
-                    span.as_range(),
-                    if let Some(source) = source {
-                        format!(". Based on: {}.", source)
-                    } else {
-                        String::new()
-                    }
-                ),
-                // --------------------------------------------------------------
-                Self::InvalidNumericInput { span, source } => format!(
-                    "Invalid, or badly formed, numeric input; span: {:?}{}",
-                    span.as_range(),
-                    if let Some(source) = source {
-                        format!(". Based on: {}.", source)
-                    } else {
-                        String::new()
-                    }
-                ),
-                // --------------------------------------------------------------
-                Self::IncompleteList { span } =>
-                    format!("Didn't find an end to the open list; span: {:?}", span),
-                // --------------------------------------------------------------
-                Self::IncompleteVector { span } =>
-                    format!("Didn't find an end to the open list; span: {:?}", span),
-                // --------------------------------------------------------------
-                Self::InvalidByteVectorPrefix { span } => format!(
-                    "Invalid or incomplete byte vector prefix; span: {:?}",
-                    span.as_range()
-                ),
-                Self::IncompleteByteVector { span } =>
-                    format!("Didn't find an end to the open list; span: {:?}", span),
-                // --------------------------------------------------------------
-                Self::IncompleteQuote { span } => format!(
-                    "The quote symbol \"'\" was not followed by a datum; span: {:?}",
-                    span
-                ),
-                Self::IncompleteQuasiQuote { span } => format!(
-                    "The quasi-quote symbol \"`\" was not followed by a datum; span: {:?}",
-                    span
-                ),
-                Self::IncompleteUnquote { span } => format!(
-                    "The unquote symbol \",\" was not followed by a datum; span: {:?}",
-                    span
-                ),
-                Self::IncompleteUnquoteSplicing { span } => format!(
-                    "The unquote-splicing symbol \",@\" was not followed by a datum; span: {:?}",
-                    span
-                ),
-                // --------------------------------------------------------------
-                Self::IncompleteBlockComment { span } => format!(
-                    "Incomplete block comment, expecting a terminating `#|`; span: {:?}",
-                    span.as_range()
-                ),
-                Self::IncompleteDatumComment { span } => format!(
-                    "Datum comment symbol not followed by an actual datum; span: {:?}",
-                    span
-                ),
-                // --------------------------------------------------------------
-                Self::UnexpectedToken {
-                    token,
-                    span,
-                    within,
-                } => format!(
-                    "The token {} was not expected; span: {:?}{}",
-                    token,
-                    span,
-                    if let Some(within) = within {
-                        format!(", within: {:?}", within.as_range())
-                    } else {
-                        "".into()
-                    }
-                ),
-            }
-        )
+                f,
+                "{}",
+                match self {
+                    Self::IoError { source } => format!("An I/O error occurred; source: {}", source),
+                    // --------------------------------------------------------------
+                    Self::IncompleteSpecial { span } =>
+                        format!("Incomplete special form, span: {span}"),
+                    Self::InvalidDirectiveInput { span } => format!(
+                        "Invalid, or badly formed, directive input; span: {span}"
+                    ),
+                    // --------------------------------------------------------------
+                    Self::UnknownDirectiveName { span, name } => format!(
+                        "The directive name {name:?} is not known; span: {span}"
+                    ),
+                    // --------------------------------------------------------------
+                    Self::InvalidDatumLabel { span } => format!(
+                        "Invalid, or badly formed, datum label assignment or reference; span: {span}"
+                    ),
+                    Self::DuplicateDatumLabel { span, label } => format!(
+                        "The label `{label}` has already been defined; span: {span}"
+                    ),
+                    Self::UnknownDatumLabel { span, label } => format!(
+                        "The label `{label}` referenced has not been defined; span: {span}"
+                    ),
+                    Self::IncompleteDatumAssignment { span, label } => format!(
+                        "Datum assignment to label `{label}` not followed by an actual datum; span: {span}"
+                    ),
+                    // --------------------------------------------------------------
+                    Self::IncompleteIdentifier { span } => format!(
+                        "Incomplete identifier, expecting a terminating `#\\|`; span: {span}"
+                    ),
+                    Self::InvalidIdentifierMnemonicEscape { span } => format!(
+                        "Invalid mnemonic escape in identifier; span: {span}"
+                    ),
+                    Self::InvalidIdentifierHexEscape { span } => format!(
+                        "Invalid hex escape in identifier span: {span}"
+                    ),
+                    Self::InvalidIdentifierInput { span, source } => format!(
+                        "Invalid, or badly formed, identifier input; span: {span}{}",
+                        if let Some(source) = source {
+                            format!(". Based on: {}.", source)
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    // --------------------------------------------------------------
+                    Self::InvalidBooleanInput { span } => format!(
+                        "Invalid, or badly formed, boolean input; span: {span}"
+                    ),
+                    // --------------------------------------------------------------
+                    Self::UnknownCharName { span, name } => format!(
+                        "Unknown character name {name:?}; span: {span}"
+                    ),
+                    Self::InvalidUnicodeValue { span } => format!(
+                        "Could not convert to a valid Unicode codepoint; span: {span}"
+                    ),
+                    Self::InvalidCharInput { span, source } => format!(
+                        "Invalid, or badly formed, character input; span: {span}{}",
+                       if let Some(source) = source {
+                            format!(". Based on: {}.", source)
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    // --------------------------------------------------------------
+                    Self::IncompleteString { span } => format!(
+                        "Incomplete string, expecting a terminating `#\\\"`; span: {span}"
+                    ),
+                    Self::InvalidStringMnemonicEscape { span } => format!(
+                        "Invalid mnemonic escape in string; span: {span}"
+                    ),
+                    Self::InvalidStringHexEscape { span } =>
+                        format!("Invalid hex escape in string span: {span}"),
+                    Self::InvalidStringInput { span, source } => format!(
+                        "Invalid, or badly formed, string input; span: {span}{}",
+                        if let Some(source) = source {
+                            format!(". Based on: {}.", source)
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    // --------------------------------------------------------------
+                    Self::InvalidNumericInput { span, source } => format!(
+                        "Invalid, or badly formed, numeric input; span: {span}{}",
+                        if let Some(source) = source {
+                            format!(". Based on: {}.", source)
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    // --------------------------------------------------------------
+                    Self::IncompleteList { span } =>
+                        format!("Didn't find an end to the open list; span: {span}"),
+                    Self::IncompletePair { span } => format!("Didn't find an end to the open pair; span: {span}"),
+                    Self::PairMissingCar {span } => format!("Dotted pair missing a car value; span: {span}"),
+                    Self::PairMissingCdr { span } => format!("Dotted pair missing a cdr value; span: {span}"),
+                    Self::PairAdditionalCdr { span } => format!("Dotted pair already has a cdr value; span: {span}"),
+                    Self::InvalidPairInput { span, source } => format!("Invalid, or badly formed, dotted pair; span: {span}{}",
+                        if let Some(source) = source {
+                            format!(". Based on: {}.", source)
+                        } else {
+                            String::new()
+                        }
+                    ),
+                    Self::CannotAppendToImproperPair { span } => format!("Cannot use cons or append with improper pair; span: {span}"),
+                    // --------------------------------------------------------------
+                    Self::IncompleteVector { span } =>
+                        format!("Didn't find an end to the open list; span: {span}"),
+                    // --------------------------------------------------------------
+                    Self::InvalidByteVectorPrefix { span } => format!(
+                        "Invalid or incomplete byte vector prefix; span: {span}"
+                    ),
+                    Self::IncompleteByteVector { span } =>
+                        format!("Didn't find an end to the open list; span: {span}"),
+                    Self::InvalidByteInput { span } => format!("Not an exact integer in the range 0..=255; span: {span}"),
+                    // --------------------------------------------------------------
+                    Self::IncompleteQuote { span } => format!(
+                        "The quote symbol \"'\" was not followed by a datum; span: {span}"
+                    ),
+                    Self::IncompleteQuasiQuote { span } => format!(
+                        "The quasi-quote symbol \"`\" was not followed by a datum; span: {span}"
+                    ),
+                    Self::IncompleteUnquote { span } => format!(
+                        "The unquote symbol \",\" was not followed by a datum; span: {span}"
+                    ),
+                    Self::IncompleteUnquoteSplicing { span } => format!(
+                        "The unquote-splicing symbol \",@\" was not followed by a datum; span: {span}"
+                    ),
+                    // --------------------------------------------------------------
+                    Self::IncompleteBlockComment { span } => format!(
+                        "Incomplete block comment, expecting a terminating `#|`; span: {span}"
+                    ),
+                    Self::IncompleteDatumComment { span } => format!(
+                        "Datum comment symbol not followed by an actual datum; span: {span}"
+                    ),
+                    // --------------------------------------------------------------
+                    Self::UnexpectedToken {
+                        token,
+                        span,
+                        within,
+                    } => format!(
+                        "The token {token} was not expected; span: {span}{}",
+                         if let Some(within) = within {
+                            format!(", within: {:?}", within.as_range())
+                        } else {
+                            "".into()
+                        }
+                    ),
+                }
+            )
     }
 }
 
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            Error::IoError { source } => Some(source),
+            Self::IoError { source } => Some(source),
+            // TODO: Self::InvalidIdentifierInput { span: _, source } => source.map(|s| s.as_ref()),
             _ => None,
         }
     }
@@ -682,6 +753,7 @@ impl Error {
             Self::InvalidDatumLabel { span: _ } => 13,
             Self::DuplicateDatumLabel { label: _, span: _ } => 14,
             Self::UnknownDatumLabel { label: _, span: _ } => 15,
+            Self::IncompleteDatumAssignment { span: _, label: _ } => 16,
             // --------------------------------------------------------------
             Self::IncompleteIdentifier { span: _ } => 20,
             Self::InvalidIdentifierMnemonicEscape { span: _ } => 21,
@@ -702,9 +774,16 @@ impl Error {
             Self::InvalidNumericInput { span: _, source: _ } => 70,
             // --------------------------------------------------------------
             Self::IncompleteList { span: _ } => 80,
-            Self::IncompleteVector { span: _ } => 81,
-            Self::InvalidByteVectorPrefix { span: _ } => 82,
-            Self::IncompleteByteVector { span: _ } => 83,
+            Self::IncompletePair { span: _ } => 81,
+            Self::PairMissingCar { span: _ } => 82,
+            Self::PairMissingCdr { span: _ } => 83,
+            Self::PairAdditionalCdr { span: _ } => 84,
+            Self::InvalidPairInput { span: _, source: _ } => 85,
+            Self::IncompleteVector { span: _ } => 86,
+            Self::InvalidByteVectorPrefix { span: _ } => 87,
+            Self::IncompleteByteVector { span: _ } => 88,
+            Self::InvalidByteInput { span: _ } => 89,
+            Self::CannotAppendToImproperPair { span: _ } => 90,
             // --------------------------------------------------------------
             Self::IncompleteQuote { span: _ } => 91,
             Self::IncompleteQuasiQuote { span: _ } => 92,
@@ -722,7 +801,10 @@ impl Error {
         }
     }
     pub fn report(&self) -> Option<Report> {
-        let syntax = Color::Fixed(81);
+        const SYNTAX: Color = Color::Magenta;
+        const TYPES: Color = Color::Blue;
+        const FUNCTIONS: Color = Color::Cyan;
+        const VALUES: Color = Color::Green;
 
         match self {
             // --------------------------------------------------------------
@@ -755,7 +837,7 @@ impl Error {
                     .with_label(
                         Label::new(span.as_range())
                             .with_message(
-                                format!("{} is not a directive name", name.fg(syntax))),
+                                format!("{} is not a directive name", name.fg(SYNTAX))),
                     )
                     .finish(),
             ),
@@ -771,8 +853,8 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting a datum label assignment, {}, or reference, {}",
-                            "#⟨nn⟩=⟨datum⟩".fg(syntax),
-                            "#nn#".fg(syntax)
+                            "#⟨nn⟩=⟨datum⟩".fg(SYNTAX),
+                            "#nn#".fg(SYNTAX)
                         ))
                     .finish(),
             ),
@@ -783,18 +865,37 @@ impl Error {
                     .with_label(
                         Label::new(span.as_range())
                             .with_message(
-                                format!("The label `{}` has already been defined", label)),
+                                format!("The label {} has already been defined", label.to_string().fg(VALUES))),
                     )
                    .finish(),
             ),
-             Self::UnknownDatumLabel { span, label } => Some(
+            Self::UnknownDatumLabel { span, label } => Some(
                 Report::build(ReportKind::Error, (), span.start())
                     .with_code(self.code())
                     .with_message("Unknown datum label")
                     .with_label(
                         Label::new(span.as_range())
                             .with_message(
-                            format!("The label `{}` has not been defined", label)),
+                            format!("The label `{}` has not been defined", label.to_string().fg(VALUES))),
+                    )
+                   .finish(),
+            ),
+            Self::IncompleteDatumAssignment { span, label } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Incomplete datum assignment")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message(
+                            format!(
+                                    "The datum assignment {} was not followed by a datum",
+                                    "#⟨nn⟩=".fg(SYNTAX)
+                                )),
+                    )
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message(
+                            format!("The label `{}` is therefore not defined", label)),
                     )
                    .finish(),
             ),
@@ -805,7 +906,7 @@ impl Error {
                     .with_message("Incomplete identifier")
                     .with_label(
                         Label::new(span.as_start_range())
-                            .with_message(format!("Starts with {} here", "#\\|".fg(syntax))),
+                            .with_message(format!("Starts with {} here", "#\\|".fg(SYNTAX))),
                     )
                     .finish()
             ),
@@ -820,7 +921,7 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting a mnemonic in {}",
-                            "#\\a #\\b #\\t #\\n #\\r #\\\" #\\\\ #\\|".fg(syntax),
+                            "#\\a #\\b #\\t #\\n #\\r #\\\" #\\\\ #\\|".fg(SYNTAX),
                         ))
                     .finish()
             ),
@@ -835,7 +936,7 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting a hex escape in the form {}",
-                            "\\x⟨nn⟩;".fg(syntax)
+                            "\\x⟨nn⟩;".fg(SYNTAX)
                         ))
                     .finish()
             ),
@@ -866,8 +967,8 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting either {} or {}",
-                            "#t".fg(syntax),
-                            "#f".fg(syntax)
+                            "#t".fg(VALUES),
+                            "#f".fg(VALUES)
                         ))
                     .finish(),
             ),
@@ -906,9 +1007,9 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting {}, {}, or {}",
-                            "#\\⟨char⟩".fg(syntax),
-                             "#\\⟨name⟩".fg(syntax),
-                            "#\\x⟨hh⟩;".fg(syntax)
+                            "#\\⟨char⟩".fg(SYNTAX),
+                             "#\\⟨name⟩".fg(SYNTAX),
+                            "#\\x⟨hh⟩;".fg(SYNTAX)
                         ))
                     .finish(),
             ),
@@ -924,7 +1025,7 @@ impl Error {
                         Label::new(span.as_end_range())
                             .with_message("Reported here"),
                     )
-                    .with_note(format!("Expecting a closing {} character", "#\\\"".fg(syntax)))
+                    .with_note(format!("Expecting a closing {} character", "#\\\"".fg(SYNTAX)))
                     .finish(),
             ),
             Self::InvalidStringMnemonicEscape { span } => Some(
@@ -938,7 +1039,7 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting a mnemonic in {}",
-                            "#\\a #\\b #\\t #\\n #\\r #\\\" #\\\\ #\\|".fg(syntax),
+                            "#\\a #\\b #\\t #\\n #\\r #\\\" #\\\\ #\\|".fg(SYNTAX),
                         ))
                     .finish()
             ),
@@ -953,7 +1054,7 @@ impl Error {
                     .with_note(
                         format!(
                             "Expecting a hex escape in the form {}",
-                            "\\x⟨nn⟩;".fg(syntax)
+                            "\\x⟨nn⟩;".fg(SYNTAX)
                         ))
                     .finish()
             ),
@@ -987,7 +1088,74 @@ impl Error {
                         Label::new(span.as_range())
                             .with_message("List starts here"),
                     )
-                    .with_note(format!("Expecting a closing {}", "#\\)".fg(syntax)))
+                    .with_note(format!("Expecting a closing {}", "#\\)".fg(SYNTAX)))
+                    .finish(),
+            ),
+            Self::IncompletePair { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Incomplete pair")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("List starts here"),
+                    )
+                    .with_note(format!("Expecting a closing {}", "#\\)".fg(SYNTAX)))
+                    .finish(),
+            ),
+            Self::PairMissingCar { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message(format!("Pair is missing a {} value", "car".fg(FUNCTIONS)))
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("need a datum left of this dot"),
+                    )
+                    .finish(),
+            ),
+            Self::PairMissingCdr { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message(format!("Pair is missing a {} value", "cdr".fg(FUNCTIONS)))
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("need a datum right of this dot"),
+                    )
+                    .finish(),
+            ),
+            Self::PairAdditionalCdr { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message(format!("Pair already has a {} value", "cdr".fg(FUNCTIONS)))
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("too many values right of this dot"),
+                    )
+                    .finish(),
+            ),
+            Self::InvalidPairInput { span, source: _ } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Invalid, or badly formed, pair")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("Could not construct a pair from this"),
+                    )
+                    .finish(),
+            ),
+            Self::CannotAppendToImproperPair { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message(
+                        format!(
+                            "Cannot use {} or {} with an improper pair",
+                            "cons".fg(FUNCTIONS),
+                            "append".fg(FUNCTIONS)
+                        ))
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("This pair"),
+                    )
+                    .with_note(format!("Expecting a {} value", "list?".fg(TYPES)))
                     .finish(),
             ),
             // --------------------------------------------------------------
@@ -999,19 +1167,19 @@ impl Error {
                         Label::new(span.as_range())
                             .with_message("Vector starts here"),
                     )
-                    .with_note(format!("Expecting a closing {}", "#\\)".fg(syntax)))
+                    .with_note(format!("Expecting a closing {}", "#\\)".fg(SYNTAX)))
                     .finish(),
             ),
             // --------------------------------------------------------------
             Self::InvalidByteVectorPrefix { span } => Some(
                 Report::build(ReportKind::Error, (), span.start())
                     .with_code(self.code())
-                    .with_message("Invalid, or incomplete, byte vector prefix")
+                    .with_message("Too many datum values right of dot")
                     .with_label(
                         Label::new(span.as_range())
                             .with_message("This is not a valid byte vector prefix"),
                     )
-                    .with_note(format!("Expecting the prefix {}", "#u8(".fg(syntax)))
+                    .with_note(format!("Expecting the prefix {}", "#u8(".fg(SYNTAX)))
                     .finish(),
             ),
             Self::IncompleteByteVector { span } => Some(
@@ -1022,7 +1190,18 @@ impl Error {
                         Label::new(span.as_range())
                             .with_message("Byte vector starts here"),
                     )
-                    .with_note(format!("Expecting a closing {}", ")".fg(syntax)))
+                    .with_note(format!("Expecting a closing {}", ")".fg(SYNTAX)))
+                    .finish(),
+            ),
+            Self::InvalidByteInput { span } => Some(
+                Report::build(ReportKind::Error, (), span.start())
+                    .with_code(self.code())
+                    .with_message("Invalid value in byte-vector")
+                    .with_label(
+                        Label::new(span.as_range())
+                            .with_message("This is not a valid byte"),
+                    )
+                    .with_note(format!("Expecting an exact integer in the range 0..=255"))
                     .finish(),
             ),
             // --------------------------------------------------------------
@@ -1035,7 +1214,7 @@ impl Error {
                             .with_message(
                                 format!(
                                     "The quote symbol {} was not followed by a datum",
-                                    "⟨'⟩".fg(syntax)
+                                    "⟨'⟩".fg(SYNTAX)
                                 )),
                     )
                    .finish(),
@@ -1049,7 +1228,7 @@ impl Error {
                             .with_message(
                                 format!(
                                     "The quasi-quote symbol {} was not followed by a datum",
-                                    "⟨`⟩".fg(syntax)
+                                    "⟨`⟩".fg(SYNTAX)
                                 )),
                     )
                    .finish(),
@@ -1063,7 +1242,7 @@ impl Error {
                             .with_message(
                                 format!(
                                     "The unquote symbol {} was not followed by a datum",
-                                    "⟨,⟩".fg(syntax)
+                                    "⟨,⟩".fg(SYNTAX)
                                 )),
                     )
                    .finish(),
@@ -1077,7 +1256,7 @@ impl Error {
                             .with_message(
                                 format!(
                                     "The unquote-splicing symbol {} was not followed by a datum",
-                                    "⟨,@⟩".fg(syntax)
+                                    "⟨,@⟩".fg(SYNTAX)
                                 )),
                     )
                    .finish(),
@@ -1091,7 +1270,7 @@ impl Error {
                         Label::new(span.as_range())
                             .with_message("Comment starts here"),
                     )
-                    .with_note(format!("Expecting a closing {}", "|#".fg(syntax)))
+                    .with_note(format!("Expecting a closing {}", "|#".fg(SYNTAX)))
                     .finish(),
             ),
             Self::IncompleteDatumComment { span } => Some(
@@ -1103,7 +1282,7 @@ impl Error {
                             .with_message(
                             format!(
                                     "The datum quote form {} was not followed by a datum",
-                                    "#;".fg(syntax)
+                                    "#;".fg(SYNTAX)
                                 )),
                     )
                     .finish(),

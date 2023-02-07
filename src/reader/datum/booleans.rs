@@ -9,15 +9,15 @@ YYYYY
 
 */
 
-use crate::reader::datum::{Datum, DatumValue, SimpleDatumValue};
+use crate::reader::datum::SimpleDatumValue;
+use crate::syntax::{
+    BOOLEAN_VALUE_FALSE, BOOLEAN_VALUE_FALSE_UC, BOOLEAN_VALUE_TRUE, BOOLEAN_VALUE_TRUE_UC,
+};
 use crate::{
     error::{invalid_boolean_input, Error},
     lexer::token::Span,
 };
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::fmt::{Debug, Display};
 use tracing::error;
 
 // ------------------------------------------------------------------------------------------------
@@ -45,52 +45,36 @@ pub struct SBoolean(bool);
 
 impl Display for SBoolean {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#{}", if self.0 { 't' } else { 'f' })
+        write!(
+            f,
+            "{}",
+            if self.0 {
+                BOOLEAN_VALUE_TRUE
+            } else {
+                BOOLEAN_VALUE_FALSE
+            }
+        )
     }
 }
 
 impl Debug for SBoolean {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "#{}", if self.0 { 't' } else { 'f' })
+        write!(f, "{}", self)
     }
 }
 
-impl From<bool> for SBoolean {
-    fn from(v: bool) -> Self {
-        Self(v)
-    }
-}
+impl_datum_value!(Boolean, SBoolean, infallible bool);
 
-impl From<SBoolean> for bool {
-    fn from(v: SBoolean) -> Self {
-        v.0
-    }
-}
-
-impl From<SBoolean> for Datum {
-    fn from(v: SBoolean) -> Self {
-        Self::Boolean(v)
-    }
-}
-
-impl FromStr for SBoolean {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_str_in_span(s, Span::new_char_span_from(s))
-    }
-}
-
-impl DatumValue for SBoolean {}
+impl_simple_datum_from_str!(Boolean, SBoolean);
 
 impl SimpleDatumValue for SBoolean {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
         let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
-        if s == "#t" {
+        if s == BOOLEAN_VALUE_TRUE || s == BOOLEAN_VALUE_TRUE_UC {
             Ok(SBoolean::from(true))
-        } else if s == "#f" {
+        } else if s == BOOLEAN_VALUE_FALSE || s == BOOLEAN_VALUE_FALSE_UC {
             Ok(SBoolean::from(false))
         } else {
             error!("Invalid value for boolean {s:?}");

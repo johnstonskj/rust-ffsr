@@ -76,8 +76,6 @@ impl<'a> Reader<'a> {
 // Modules
 // ------------------------------------------------------------------------------------------------
 
-mod internals;
-
 pub mod datum;
-
+mod internals;
 pub mod iter;

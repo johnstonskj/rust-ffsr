@@ -9,16 +9,14 @@ YYYYY
 
 */
 
-use super::{Datum, DatumValue, SimpleDatumValue};
 use crate::error::{invalid_char_input, invalid_unicode_value, unknown_char_name, Error};
 use crate::lexer::token::Span;
+use crate::reader::datum::SimpleDatumValue;
+use crate::syntax::{CHAR_HEX_ESCAPE_END, CHAR_HEX_ESCAPE_START, CHAR_PREFIX_STR};
 use std::fmt::Write;
+use std::fmt::{Debug, Display};
 use std::iter::FusedIterator;
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
-use tracing::{error, trace};
+use tracing::error;
 
 // ------------------------------------------------------------------------------------------------
 // Public Macros
@@ -76,51 +74,26 @@ enum EscapeDefaultState {
 
 impl Display for SChar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}{}", CHAR_PREFIX_STR, self.0)
     }
 }
 
 impl Debug for SChar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.escape_default())
+        write!(f, "{}{}", CHAR_PREFIX_STR, self.escape_default())
     }
 }
 
-impl From<char> for SChar {
-    fn from(v: char) -> Self {
-        Self(v)
-    }
-}
+impl_datum_value!(Char, SChar, infallible char);
 
-impl From<SChar> for char {
-    fn from(v: SChar) -> Self {
-        v.0
-    }
-}
-
-impl From<SChar> for Datum {
-    fn from(v: SChar) -> Self {
-        Self::Char(v)
-    }
-}
-
-impl FromStr for SChar {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Self::from_str_in_span(s, Span::new_char_span_from(s))
-    }
-}
-
-impl DatumValue for SChar {}
+impl_simple_datum_from_str!(Char, SChar);
 
 impl SimpleDatumValue for SChar {
     fn from_str_in_span(s: &str, span: Span) -> Result<Self, Error> {
         let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
         let _scope = _span.enter();
 
-        trace!("SChar? {:?}", s);
-        if s.len() > 2 && s.starts_with("#\\") {
+        if s.len() > 2 && s.starts_with(CHAR_PREFIX_STR) {
             let s = &s[2..];
             if s == "alarm" {
                 Ok(SChar::from('\u{07}'))
@@ -140,7 +113,7 @@ impl SimpleDatumValue for SChar {
                 Ok(SChar::from(' '))
             } else if s == "tab" {
                 Ok(SChar::from('\u{09}'))
-            } else if s.starts_with('x') && s.ends_with(';') {
+            } else if s.starts_with(CHAR_HEX_ESCAPE_START) && s.ends_with(CHAR_HEX_ESCAPE_END) {
                 let s = &s[1..s.len() - 1];
                 let cp = u32::from_str_radix(s, 16)
                     .map_err(|_| invalid_unicode_value::<Self>(span).unwrap_err())?;
@@ -157,7 +130,7 @@ impl SimpleDatumValue for SChar {
                 }
             }
         } else {
-            error!("Char does not start with prefix '#\\'");
+            error!("Char does not start with prefix {CHAR_PREFIX_STR:?}");
             invalid_char_input(span)
         }
     }
