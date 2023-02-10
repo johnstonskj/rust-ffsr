@@ -21,3 +21,9 @@ success_case!(unicode, "#\\û" => Char, SChar::from('û'));
 // ------------------------------------------------------------------------------------------------
 // Failure cases
 // ------------------------------------------------------------------------------------------------
+
+failure_case!(no_name, "#\\");
+
+failure_case!(unknown_name, "#\\unknown");
+
+failure_case!(incomplete_hex_escape, "#\\x00fb");

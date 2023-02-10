@@ -11,9 +11,9 @@ YYYYY
 
 use crate::error::{invalid_byte_input, Error};
 use crate::lexer::token::Span;
-use crate::reader::datum::{Datum, Fixnum};
+use crate::reader::datum::numbers::{Fixnum, Integer};
+use crate::reader::datum::Datum;
 use crate::syntax::{BYTE_VECTOR_END, BYTE_VECTOR_START, VECTOR_END, VECTOR_START};
-use num_bigint::ToBigInt;
 use std::fmt::{Debug, Display};
 use std::ops::Deref;
 use tracing::error;
@@ -173,8 +173,7 @@ impl SByteVector {
     }
 
     pub fn try_append(&mut self, fixnum: Fixnum) -> Result<(), Error> {
-        if fixnum.deref() >= &0.to_bigint().unwrap() && fixnum.deref() <= &255.to_bigint().unwrap()
-        {
+        if fixnum.deref() >= &Integer::from(0) && fixnum.deref() <= &Integer::from(255) {
             self.0.push(fixnum);
         } else {
             panic!("Not a valid fixnum value, #e0..#e255");

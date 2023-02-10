@@ -91,3 +91,4 @@ Cargo.lock
 
 # Created by cargo tarpaulin --out html
 tarpaulin-report.html
+/flamegraph.svg

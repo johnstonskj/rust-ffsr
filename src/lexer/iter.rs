@@ -19,8 +19,8 @@ use crate::input::iter::CharIndices;
 use crate::lexer::internals::{IteratorState, State};
 use crate::lexer::token::{Span, Token, TokenKind};
 use crate::syntax::{
-    IDENTIFIER_WRAPPER, PAIR_END, PAIR_START, QUASI_QUOTE_ABBREV, QUOTE_ABBREV, STRING_QUOTE,
-    UNQUOTE_ABBREV, UNQUOTE_SPLICING_ABBREV,
+    IDENTIFIER_WRAPPER, PAIR_END, PAIR_START, QUASI_QUOTE_ABBREV, QUOTE_ABBREV,
+    SPECIAL_PREFIX_CHAR, STRING_QUOTE, UNQUOTE_ABBREV, UNQUOTE_SPLICING_ABBREV,
 };
 use crate::{SourceId, Sourced};
 use tracing::{error, trace, trace_span};
@@ -263,7 +263,7 @@ impl Iterator for TokenIter<'_> {
                 }
                 // --------------------------------------------------------------------------------
                 // Start of special forms
-                (State::Nothing | State::InWhitespace | State::InNumber, '#') => {
+                (State::Nothing | State::InWhitespace, SPECIAL_PREFIX_CHAR) => {
                     state_change_at!(char_index, current_state => InSpecial);
                 }
                 // --------------------------------------------------------------------------------
@@ -419,44 +419,44 @@ impl Iterator for TokenIter<'_> {
                 (State::Nothing | State::InWhitespace, c) if is_radix_char(c, number_radix) => {
                     state_change_at!(char_index, current_state => InNumber);
                 }
+                (State::InNumber, SPECIAL_PREFIX_CHAR) => {
+                    state_change!(current_state => InNumberPrefix);
+                }
                 (State::InNumber, 'e') => {}
                 (State::InNumber, 'i') => {
                     return_token_and_add_char!(current_state, char_index, Number => Nothing);
                 }
-                (State::InNumber, c) if is_radix_char(c, number_radix) => {}
+                (State::InNumber, c) if is_radix_char(c, number_radix) => {
+                    println!("IS_DIGIT {c:?}");
+                }
                 (State::InNumber, c) if is_identifier_subsequent(c) => {
                     state_change!(current_state => InIdentifier);
                 }
-                (State::InNumber, _) => {
+                (State::InNumber, c) => {
+                    println!("EON @ {c:?}");
                     self.push_back_char(char_index);
                     return_token!(current_state, char_index, Number => Nothing);
                 }
                 (State::InSpecial | State::InNumberPrefix, 'e' | 'i') => {
-                    state_change!(current_state => InNumberPrefix);
+                    state_change!(current_state => InNumber);
                 }
                 (State::InSpecial | State::InNumberPrefix, 'b') => {
                     number_radix = 2;
-                    state_change!(current_state => InNumberPrefix);
+                    state_change!(current_state => InNumber);
                 }
                 (State::InSpecial | State::InNumberPrefix, 'o') => {
                     number_radix = 8;
-                    state_change!(current_state => InNumberPrefix);
+                    state_change!(current_state => InNumber);
                 }
                 (State::InSpecial | State::InNumberPrefix, 'd') => {
                     number_radix = 10;
-                    state_change!(current_state => InNumberPrefix);
+                    state_change!(current_state => InNumber);
                 }
                 (State::InSpecial | State::InNumberPrefix, 'x') => {
+                    println!("HEX");
                     number_radix = 16;
-                    state_change!(current_state => InNumberPrefix);
-                }
-                (State::InNumberPrefix, c) if is_radix_char(c, number_radix) => {
                     state_change!(current_state => InNumber);
                 }
-                (State::InNumberPrefix, '+' | '-' | '.') => {
-                    state_change!(current_state => InNumber);
-                }
-                (State::InNumberPrefix, '#') => {}
                 // --------------------------------------------------------------------------------
                 // Vector values
                 (State::InSpecial, '(') => {
