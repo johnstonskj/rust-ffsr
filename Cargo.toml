@@ -7,17 +7,21 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
-default = []
+default = ["regex-parser"]
 big-numbers = []
 radix-floats = []
+regex-parser = ["const_format", "lazy_static", "regex"]
 
 [dependencies]
 ariadne = "0.1"
 concolor = { version = "0.0", features = ["auto"] }
+const_format = { version = "0.2", features = ["rust_1_51"], optional = true }
+lazy_static = { version = "1.4", optional = true }
 num-complex = "0.4"
 num-rational = "0.4"
 num-traits = "0.2"
 paste = "1.0"
+regex = { version = "1.7", optional = true }
 tracing = "0.1"
 unicode_categories = "0.1"
 

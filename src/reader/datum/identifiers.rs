@@ -3,6 +3,24 @@ One-line description.
 
 More detailed description, with
 
+From §7.1.1
+
+> Identifiers that do not begin with a vertical line are termi- nated by a
+> ⟨delimiter⟩ or by the end of the input. So are dot, numbers, characters, and
+> booleans. Identifiers that begin with a vertical line are terminated by
+> another vertical line. The following four characters from the ASCII
+> repertoire are reserved for future extensions to the language: `[ ] { }`
+>
+> In addition to the identifier characters of the ASCII reper- toire specified
+> below, Scheme implementations may permit any additional repertoire of Unicode
+> characters to be em- ployed in identifiers, provided that each such character
+> has a Unicode general category of Lu, Ll, Lt, Lm, Lo, Mn, Mc, Me, Nd, Nl, No,
+> Pd, Pc, Po, Sc, Sm, Sk, So, or Co, or is `U+200C` or `U+200D` (the zero-width
+> non-joiner and joiner, respectively, which are needed for correct spelling in
+> Persian, Hindi, and other languages). However, it is an error for the first
+> character to have a general category of Nd, Mc, or Me. It is also an error to
+> use a non-Unicode character in symbols or identifiers.
+
 # Example
 
 YYYYY

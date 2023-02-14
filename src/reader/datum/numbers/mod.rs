@@ -248,3 +248,12 @@ pub use complexnum::Complexnum;
 
 #[doc(hidden)]
 mod parse;
+
+#[doc(hidden)]
+#[cfg(feature = "regex-parser")]
+mod regex_parser;
+#[cfg(feature = "regex-parser")]
+pub use regex_parser::{
+    has_valid_prefix, is_valid, is_valid_binary, is_valid_decimal, is_valid_hexadecimal,
+    is_valid_octal, parse,
+};
