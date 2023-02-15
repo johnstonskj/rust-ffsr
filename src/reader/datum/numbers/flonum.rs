@@ -1,13 +1,8 @@
-use crate::reader::datum::numbers::Float;
-use crate::reader::datum::Datum;
+use crate::reader::datum::numbers::{Fixnum, Float, Number, Ratnum};
 use crate::syntax::{
     NEGATIVE_INFINITY, NEGATIVE_NAN, NUMERIC_PREFIX_INEXACT, POSITIVE_INFINITY, POSITIVE_NAN,
 };
 use std::fmt::{Debug, Display};
-
-// ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
@@ -23,10 +18,6 @@ use std::fmt::{Debug, Display};
 ///
 #[derive(Clone, Copy, Default, PartialEq, PartialOrd)]
 pub struct Flonum(Float);
-
-// ------------------------------------------------------------------------------------------------
-// Public Functions
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Private Types
@@ -78,31 +69,29 @@ impl Debug for Flonum {
     }
 }
 
-impl Flonum {
-    //    pub fn is_rational(&self) -> bool {
-    //        Rational::from_float(self.0).is_some()
-    //    }
-    //
-    //    pub fn as_rational(&self) -> Option<Ratnum> {
-    //        Rational::from_float(self.0).map(Ratnum)
-    //    }
-}
-
-impl From<f32> for Datum {
-    fn from(v: f32) -> Self {
-        Self::Number(Flonum(Float::from(v)).into())
-    }
-}
-
 flonum_only_from!(f32);
 flonum_only_from!(u8, i8);
 flonum_only_from!(u16, i16);
 flonum_only_from!(u32, i32);
 
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------
+impl From<Fixnum> for Flonum {
+    fn from(v: Fixnum) -> Self {
+        Flonum::from(v.into_value() as Float)
+    }
+}
 
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
+impl From<Ratnum> for Flonum {
+    fn from(v: Ratnum) -> Self {
+        Flonum::from((*v.value().numer() as f64) / (*v.value().denom() as f64))
+    }
+}
+
+impl Number<Float> for Flonum {
+    fn value(&self) -> &Float {
+        &self.0
+    }
+
+    fn into_value(self) -> Float {
+        self.0
+    }
+}

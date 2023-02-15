@@ -27,10 +27,6 @@ use tracing::{error, trace, trace_span};
 use unicode_categories::UnicodeCategories;
 
 // ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
@@ -198,6 +194,11 @@ fn is_radix_char(c: char, radix: u32) -> bool {
     }
 }
 
+#[inline(always)]
+fn is_exponent_char(c: char, radix: u32) -> bool {
+    c == '^' || if radix == 16 { c == 'l' } else { c == 'e' }
+}
+
 impl Iterator for TokenIter<'_> {
     type Item = Result<Token, Error>;
 
@@ -213,9 +214,10 @@ impl Iterator for TokenIter<'_> {
 
         let mut last_char_index = CharIndex::new(0, 0, '\u{00}');
         let mut number_radix: u32 = 10;
+        let mut complex = false;
 
         while let Some(char_index) = self.next_char() {
-            trace!(?current_state, ?char_index, "match");
+            trace!(?current_state, ?char_index, ?complex, "match");
 
             last_char_index = char_index;
 
@@ -419,43 +421,88 @@ impl Iterator for TokenIter<'_> {
                 (State::Nothing | State::InWhitespace, c) if is_radix_char(c, number_radix) => {
                     state_change_at!(char_index, current_state => InNumber);
                 }
-                (State::InNumber, SPECIAL_PREFIX_CHAR) => {
+                (State::InNumber, '.') => {
+                    state_change!(current_state => InNumberFraction);
+                }
+                (State::InNumber, '/') => {
+                    state_change!(current_state => InRational);
+                }
+                (State::InNumber | State::InNumberFraction, c)
+                    if is_radix_char(c, number_radix) => {}
+                (State::InNumber | State::InNumberFraction, c)
+                    if is_exponent_char(c, number_radix) =>
+                {
+                    state_change!(current_state => InNumberExponentMark);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'e' | 'i') => {
+                    state_change!(current_state => InNumberPostPrefix);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'b') => {
+                    number_radix = 2;
+                    state_change!(current_state => InNumberPostPrefix);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'o') => {
+                    number_radix = 8;
+                    state_change!(current_state => InNumberPostPrefix);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'd') => {
+                    number_radix = 10;
+                    state_change!(current_state => InNumberPostPrefix);
+                }
+                (State::InSpecial | State::InNumberPrefix, 'x') => {
+                    number_radix = 16;
+                    state_change!(current_state => InNumberPostPrefix);
+                }
+                (State::InNumberPostPrefix, SPECIAL_PREFIX_CHAR) => {
                     state_change!(current_state => InNumberPrefix);
                 }
-                (State::InNumber, 'e') => {}
-                (State::InNumber, 'i') => {
-                    return_token_and_add_char!(current_state, char_index, Number => Nothing);
+                (State::InNumberPostPrefix | State::InComplex, c)
+                    if c == '+' || c == '-' || is_radix_char(c, number_radix) =>
+                {
+                    state_change!(current_state => InNumber);
                 }
-                (State::InNumber, c) if is_radix_char(c, number_radix) => {
-                    println!("IS_DIGIT {c:?}");
+                (State::InNumberExponentMark, c)
+                    if c == '+' || c == '-' || is_radix_char(c, number_radix) =>
+                {
+                    state_change!(current_state => InNumberExponent);
+                }
+                (State::InNumberExponent, c) if is_radix_char(c, number_radix) => {}
+                (State::InRational, c) if is_radix_char(c, number_radix) => {}
+                (
+                    State::InNumber
+                    | State::InNumberFraction
+                    | State::InNumberExponent
+                    | State::InRational,
+                    '+' | '-' | '@',
+                ) => {
+                    complex = true;
+                    state_change!(current_state => InComplex);
+                }
+                (
+                    State::InNumber
+                    | State::InNumberFraction
+                    | State::InNumberExponent
+                    | State::InRational,
+                    'i',
+                ) => {
+                    if complex {
+                        return_token_and_add_char!(current_state, char_index, Number => Nothing);
+                    } else {
+                        state_change!(current_state => InIdentifier);
+                    }
                 }
                 (State::InNumber, c) if is_identifier_subsequent(c) => {
                     state_change!(current_state => InIdentifier);
                 }
-                (State::InNumber, c) => {
-                    println!("EON @ {c:?}");
+                (
+                    State::InNumber
+                    | State::InNumberFraction
+                    | State::InNumberExponent
+                    | State::InRational,
+                    _,
+                ) => {
                     self.push_back_char(char_index);
                     return_token!(current_state, char_index, Number => Nothing);
-                }
-                (State::InSpecial | State::InNumberPrefix, 'e' | 'i') => {
-                    state_change!(current_state => InNumber);
-                }
-                (State::InSpecial | State::InNumberPrefix, 'b') => {
-                    number_radix = 2;
-                    state_change!(current_state => InNumber);
-                }
-                (State::InSpecial | State::InNumberPrefix, 'o') => {
-                    number_radix = 8;
-                    state_change!(current_state => InNumber);
-                }
-                (State::InSpecial | State::InNumberPrefix, 'd') => {
-                    number_radix = 10;
-                    state_change!(current_state => InNumber);
-                }
-                (State::InSpecial | State::InNumberPrefix, 'x') => {
-                    println!("HEX");
-                    number_radix = 16;
-                    state_change!(current_state => InNumber);
                 }
                 // --------------------------------------------------------------------------------
                 // Vector values
@@ -558,7 +605,10 @@ impl Iterator for TokenIter<'_> {
             State::InIdentifier | State::InPeculiarIdentifier | State::InNumberOrIdentifier => {
                 return_token!(current_state, last_char_index, Identifier);
             }
-            State::InNumber => {
+            State::InNumber
+            | State::InNumberFraction
+            | State::InNumberExponent
+            | State::InRational => {
                 return_token!(current_state, last_char_index, Number);
             }
             State::InLineComment => {
@@ -615,11 +665,3 @@ impl TokenIter<'_> {
         self.get(token.byte_span().as_range()).unwrap()
     }
 }
-
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------

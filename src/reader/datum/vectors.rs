@@ -13,14 +13,12 @@ use crate::error::{invalid_byte_input, Error};
 use crate::lexer::token::Span;
 use crate::reader::datum::numbers::{Fixnum, Integer};
 use crate::reader::datum::Datum;
-use crate::syntax::{BYTE_VECTOR_END, BYTE_VECTOR_START, VECTOR_END, VECTOR_START};
+use crate::syntax::{
+    BYTE_VECTOR_END, BYTE_VECTOR_START, NUMERIC_PREFIX_EXACT, VECTOR_END, VECTOR_START,
+};
 use std::fmt::{Debug, Display};
 use std::ops::Deref;
 use tracing::error;
-
-// ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
@@ -32,14 +30,6 @@ pub struct SVector(Vec<Datum>);
 
 #[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SByteVector(Vec<Fixnum>);
-
-// ------------------------------------------------------------------------------------------------
-// Public Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Private Types
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Implementations
@@ -176,7 +166,11 @@ impl SByteVector {
         if fixnum.deref() >= &Integer::from(0) && fixnum.deref() <= &Integer::from(255) {
             self.0.push(fixnum);
         } else {
-            panic!("Not a valid fixnum value, #e0..#e255");
+            panic!(
+                "Not a valid fixnum value, {NUMERIC_PREFIX_EXACT}{}..{NUMERIC_PREFIX_EXACT}{}",
+                u8::MIN,
+                u8::MAX
+            );
         }
         Ok(())
     }
@@ -185,7 +179,3 @@ impl SByteVector {
         self.0.push(byte.into());
     }
 }
-
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------

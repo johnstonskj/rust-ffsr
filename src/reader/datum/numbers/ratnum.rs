@@ -1,4 +1,4 @@
-use crate::reader::datum::numbers::{Fixnum, Integer};
+use crate::reader::datum::numbers::{Fixnum, Integer, Number};
 use crate::syntax::{
     NUMERIC_PREFIX_BINARY, NUMERIC_PREFIX_EXACT, NUMERIC_PREFIX_HEXADECIMAL, NUMERIC_PREFIX_OCTAL,
     NUMERIC_RATIONAL_SEPARATOR,
@@ -6,10 +6,6 @@ use crate::syntax::{
 use num_rational::Ratio as NumRational;
 use std::fmt::Display;
 use std::fmt::{Binary, Debug, LowerHex, Octal, UpperHex};
-
-// ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
@@ -28,14 +24,6 @@ pub(crate) type Rational = NumRational<Integer>;
 ///
 #[derive(Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Ratnum(Rational);
-
-// ------------------------------------------------------------------------------------------------
-// Public Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Private Types
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Implementations
@@ -115,6 +103,16 @@ impl UpperHex for Ratnum {
     }
 }
 
+impl Number<Rational> for Ratnum {
+    fn value(&self) -> &Rational {
+        &self.0
+    }
+
+    fn into_value(self) -> Rational {
+        self.0
+    }
+}
+
 impl Ratnum {
     pub fn new(numerator: Fixnum, denominator: Fixnum) -> Self {
         Self(Rational::new(numerator.into(), denominator.into()))
@@ -132,11 +130,3 @@ impl Ratnum {
         }
     }
 }
-
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------

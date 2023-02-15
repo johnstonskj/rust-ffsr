@@ -58,11 +58,8 @@ rectangular_complex_part:
 use crate::error::Error;
 use crate::lexer::token::Span;
 use crate::reader::datum::SimpleDatumValue;
+use num_complex::ComplexFloat;
 use std::fmt::{Debug, Display};
-
-// ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
@@ -94,6 +91,11 @@ pub enum SNumber {
     Flonum(Flonum),
     /// (f64, f64)
     Complexnum(Complexnum),
+}
+
+pub trait Number<T> {
+    fn value(&self) -> &T;
+    fn into_value(self) -> T;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -133,10 +135,6 @@ macro_rules! number_impl {
         }
     };
 }
-
-// ------------------------------------------------------------------------------------------------
-// Private Types
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Implementations
@@ -220,11 +218,25 @@ impl SNumber {
             (Self::Complexnum(_) => "complexnum")
         )
     }
-}
 
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------
+    pub fn cast_as_fixnum(self) -> Fixnum {
+        match self {
+            Self::Fixnum(v) => v.clone(),
+            Self::Ratnum(v) => Fixnum::from(v.into_value().to_integer()),
+            Self::Flonum(v) => Fixnum::from(v.into_value().round() as Integer),
+            Self::Complexnum(v) => Fixnum::from(v.into_value().abs().round() as Integer),
+        }
+    }
+
+    pub fn cast_as_flonum(self) -> Flonum {
+        match self {
+            Self::Fixnum(v) => Flonum::from(v),
+            Self::Ratnum(v) => Flonum::from(v),
+            Self::Flonum(v) => v.clone(),
+            Self::Complexnum(v) => Flonum::from(v.into_value().abs()),
+        }
+    }
+}
 
 // ------------------------------------------------------------------------------------------------
 // Modules
@@ -252,8 +264,9 @@ mod parse;
 #[doc(hidden)]
 #[cfg(feature = "regex-parser")]
 mod regex_parser;
+
 #[cfg(feature = "regex-parser")]
-pub use regex_parser::{
+pub use crate::reader::datum::numbers::regex_parser::{
     has_valid_prefix, is_valid, is_valid_binary, is_valid_decimal, is_valid_hexadecimal,
-    is_valid_octal, parse,
+    is_valid_octal,
 };

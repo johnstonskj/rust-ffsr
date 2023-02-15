@@ -1,6 +1,6 @@
 use crate::syntax::{
     NEGATIVE_INFINITY, NEGATIVE_NAN, NUMERIC_ALT_EXPONENT_MARK, NUMERIC_DECIMAL_POINT,
-    NUMERIC_EXPONENT_MARK, NUMERIC_LONG_EXPONENT_MARK, NUMERIC_POLAR_SEPARATOR,
+    NUMERIC_EXPONENT_MARK, NUMERIC_LONG_EXPONENT_MARK, NUMERIC_NEGATIVE, NUMERIC_POLAR_SEPARATOR,
     NUMERIC_PREFIX_BINARY, NUMERIC_PREFIX_EXACT, NUMERIC_PREFIX_HEXADECIMAL,
     NUMERIC_PREFIX_INEXACT, NUMERIC_PREFIX_OCTAL, NUMERIC_RATIONAL_SEPARATOR, POSITIVE_INFINITY,
     POSITIVE_NAN,
@@ -11,19 +11,21 @@ use regex::Regex;
 use std::borrow::Cow;
 
 // ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
 // Public Types
 // ------------------------------------------------------------------------------------------------
 
 #[derive(Debug)]
-pub struct Parts<'a> {
-    prefix: Option<Cow<'a, str>>,
-    real: Cow<'a, str>,
-    imaginary: Option<Cow<'a, str>>,
-    polar: Option<bool>,
+pub(crate) struct Parts<'a> {
+    is_exact: Option<bool>,
+    is_polar_complex: Option<bool>,
+    real: Part<'a>,
+    imaginary: Option<Part<'a>>,
+}
+
+#[derive(Debug)]
+pub(crate) struct Part<'a> {
+    value: Cow<'a, str>,
+    radix: u32,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -62,55 +64,55 @@ pub fn is_valid_hexadecimal(s: &str) -> bool {
     REGEX_HEX.is_match(s)
 }
 
-pub fn parse(s: &str) -> Option<Parts<'_>> {
-    let captures = if s.contains(NUMERIC_PREFIX_BINARY) {
-        REGEX_BINARY.captures(s)
+pub(crate) fn parse(s: &str) -> Option<Parts<'_>> {
+    let (captures, radix) = if s.contains(NUMERIC_PREFIX_BINARY) {
+        (REGEX_BINARY.captures(s), 2)
     } else if s.contains(NUMERIC_PREFIX_OCTAL) {
-        REGEX_OCTAL.captures(s)
+        (REGEX_OCTAL.captures(s), 8)
     } else if s.contains(NUMERIC_PREFIX_HEXADECIMAL) {
-        REGEX_HEX.captures(s)
+        (REGEX_HEX.captures(s), 16)
     } else {
-        REGEX_DECIMAL.captures(s)
+        (REGEX_DECIMAL.captures(s), 10)
     };
     if let Some(captures) = captures {
-        let prefix = if let Some(part) = captures.name("prefix") {
-            Some(Cow::Borrowed(part.as_str()))
+        let is_exact = if let Some(part) = captures.name("prefix") {
+            let part = part.as_str();
+            if part.contains(NUMERIC_PREFIX_EXACT) {
+                Some(true)
+            } else if part.contains(NUMERIC_PREFIX_INEXACT) {
+                Some(false)
+            } else {
+                None
+            }
         } else {
             None
         };
-        let (polar, imaginary) = if let Some(part) = captures.name("imaginary") {
+        let (is_polar_complex, imaginary) = if let Some(part) = captures.name("imaginary") {
             let part = part.as_str();
             let polar = part.starts_with(NUMERIC_POLAR_SEPARATOR);
             (
                 Some(polar),
-                Some(Cow::Borrowed(&part[usize::from(polar)..part.len() - 1])),
+                Some(Part {
+                    value: Cow::Borrowed(&part[usize::from(polar)..part.len() - 1]),
+                    radix,
+                }),
             )
         } else {
             (None, None)
         };
         Some(Parts {
-            prefix,
-            real: Cow::Borrowed(captures.name("real").unwrap().as_str()),
+            is_exact,
+            is_polar_complex,
+            real: Part {
+                value: Cow::Borrowed(captures.name("real").unwrap().as_str()),
+                radix,
+            },
             imaginary,
-            polar,
         })
     } else {
         None
     }
 }
-
-// pub(crate) fn from_str_in_span(s: &str, span: Span) -> Result<SNumber, Error> {
-//     let _span = ::tracing::trace_span!("from_str_in_span", s, ?span);
-//     let _scope = _span.enter();
-//
-//     let parts = parse(s)?;
-//
-//     todo!()
-// }
-
-// ------------------------------------------------------------------------------------------------
-// Private Macros
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Private Types
@@ -271,151 +273,49 @@ lazy_static! {
 // ------------------------------------------------------------------------------------------------
 
 impl<'a> Parts<'a> {
-    pub fn prefix(&self) -> Option<&Cow<'a, str>> {
-        self.prefix.as_ref()
+    #[inline(always)]
+    pub(crate) fn results_in_exact(&self) -> Option<bool> {
+        self.is_exact
     }
 
-    pub fn radix(&self) -> u32 {
-        if let Some(prefix) = &self.prefix {
-            match prefix.as_ref() {
-                NUMERIC_PREFIX_BINARY => 2,
-                NUMERIC_PREFIX_OCTAL => 8,
-                NUMERIC_PREFIX_HEXADECIMAL => 16,
-                _ => 10,
-            }
-        } else {
-            10
-        }
-    }
-
-    pub fn results_in_exact(&self) -> Option<bool> {
-        if let Some(prefix) = &self.prefix {
-            match prefix.as_ref() {
-                NUMERIC_PREFIX_EXACT => Some(true),
-                _ => Some(false),
-            }
-        } else {
-            None
-        }
-    }
-
-    pub fn results_in_inexact(&self) -> Option<bool> {
-        if let Some(prefix) = &self.prefix {
-            match prefix.as_ref() {
-                NUMERIC_PREFIX_INEXACT => Some(true),
-                _ => Some(false),
-            }
-        } else {
-            None
-        }
+    #[inline(always)]
+    pub(crate) fn results_in_inexact(&self) -> Option<bool> {
+        self.is_exact.map(|b| !b)
     }
 
     // --------------------------------------------------------------------------------------------
 
-    pub fn real(&self) -> &Cow<'a, str> {
+    #[inline(always)]
+    pub(crate) fn real(&self) -> &Part<'a> {
         &self.real
     }
 
-    pub fn real_exponent(&self) -> Option<Cow<'_, str>> {
-        self.exponent(self.real())
-    }
+    // --------------------------------------------------------------------------------------------
 
-    pub fn is_real_integer(&self) -> bool {
-        !self.is_real_rational() && !self.is_real_float()
-    }
-
-    pub fn is_real_rational(&self) -> bool {
-        self.real.contains(NUMERIC_RATIONAL_SEPARATOR)
-    }
-
-    pub fn is_real_float(&self) -> bool {
-        self.real.contains(NUMERIC_DECIMAL_POINT) || self.real_exponent().is_some()
-    }
-
-    pub fn is_real_infinity(&self) -> bool {
-        self.real() == POSITIVE_INFINITY || self.real() == NEGATIVE_INFINITY
-    }
-
-    pub fn is_real_nan(&self) -> bool {
-        self.real() == POSITIVE_NAN || self.real() == NEGATIVE_NAN
+    #[inline(always)]
+    pub(crate) fn is_polar_complex(&self) -> Option<bool> {
+        self.is_polar_complex
     }
 
     // --------------------------------------------------------------------------------------------
 
-    pub fn is_complex(&self) -> bool {
-        self.imaginary.is_some()
-    }
-
-    pub fn is_polar_complex(&self) -> Option<bool> {
-        self.polar
-    }
-
-    pub fn is_cartesian_complex(&self) -> Option<bool> {
-        self.polar.map(|b| !b)
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    pub fn imaginary(&self) -> Option<&Cow<'a, str>> {
+    #[inline(always)]
+    pub(crate) fn imaginary(&self) -> Option<&Part<'a>> {
         self.imaginary.as_ref()
     }
+}
 
-    pub fn imaginary_exponent(&self) -> Option<Cow<'_, str>> {
-        if let Some(imaginary) = self.imaginary() {
-            self.exponent(imaginary)
-        } else {
-            None
-        }
+// ------------------------------------------------------------------------------------------------
+
+impl<'a> Part<'a> {
+    #[inline(always)]
+    pub(crate) fn value(&self) -> &Cow<'a, str> {
+        &self.value
     }
 
-    pub fn is_imaginary_integer(&self) -> Option<bool> {
-        if self.imaginary().is_some() {
-            Some(
-                !self.is_imaginary_rational().unwrap_or_default()
-                    && !self.is_imaginary_float().unwrap_or_default(),
-            )
-        } else {
-            None
-        }
-    }
-
-    pub fn is_imaginary_rational(&self) -> Option<bool> {
-        self.imaginary
-            .as_ref()
-            .map(|i| i.contains(NUMERIC_RATIONAL_SEPARATOR))
-    }
-
-    pub fn is_imaginary_float(&self) -> Option<bool> {
-        if self.imaginary().is_some() {
-            Some(
-                self.imaginary
-                    .as_ref()
-                    .map(|i| i.contains(NUMERIC_DECIMAL_POINT))
-                    .unwrap_or_default()
-                    || self.imaginary_exponent().is_some(),
-            )
-        } else {
-            None
-        }
-    }
-
-    pub fn is_imaginary_infinity(&self) -> Option<bool> {
-        self.imaginary
-            .as_ref()
-            .map(|i| i == POSITIVE_INFINITY || i == NEGATIVE_INFINITY)
-    }
-
-    pub fn is_imaginary_nan(&self) -> Option<bool> {
-        self.imaginary
-            .as_ref()
-            .map(|i| i == POSITIVE_NAN || i == NEGATIVE_NAN)
-    }
-
-    // --------------------------------------------------------------------------------------------
-
-    fn exponent(&self, s: &'a str) -> Option<Cow<'a, str>> {
+    pub(crate) fn exponent_mark(&self) -> Option<(char, usize)> {
         let marks = [
-            if self.radix() == 16 {
+            if self.radix == 16 {
                 NUMERIC_LONG_EXPONENT_MARK
             } else {
                 NUMERIC_EXPONENT_MARK
@@ -423,21 +323,62 @@ impl<'a> Parts<'a> {
             NUMERIC_ALT_EXPONENT_MARK,
         ];
         for mark in marks {
-            if let Some(index) = s.find(mark) {
-                return Some(Cow::Borrowed(&s[(index + 1)..]));
+            if let Some(index) = self.value.find(mark) {
+                return Some((mark, index));
             }
         }
         None
     }
+
+    #[inline(always)]
+    pub(crate) fn exponent_value(&self) -> Option<Cow<'_, str>> {
+        if let Some((_, index)) = self.exponent_mark() {
+            Some(Cow::Borrowed(&self.value[(index + 1)..]))
+        } else {
+            None
+        }
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_sign_negative(&self) -> bool {
+        self.value.starts_with(NUMERIC_NEGATIVE)
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_sign_positive(&self) -> bool {
+        !self.is_sign_negative()
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_integer(&self) -> bool {
+        !self.is_rational() && !self.is_float()
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_rational(&self) -> bool {
+        self.value.contains(NUMERIC_RATIONAL_SEPARATOR)
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_float(&self) -> bool {
+        self.value.contains(NUMERIC_DECIMAL_POINT) || self.exponent_value().is_some()
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_infinity(&self) -> bool {
+        self.value == POSITIVE_INFINITY || self.value == NEGATIVE_INFINITY
+    }
+
+    #[inline(always)]
+    pub(crate) fn is_nan(&self) -> bool {
+        self.value == POSITIVE_NAN || self.value == NEGATIVE_NAN
+    }
+
+    #[inline(always)]
+    pub(crate) fn radix(&self) -> u32 {
+        self.radix
+    }
 }
-
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------
-
-// ------------------------------------------------------------------------------------------------
-// Modules
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Unit Tests
@@ -510,144 +451,108 @@ mod tests {
     fn test_parse_integer() {
         let parts = parse("123").unwrap();
 
-        assert_eq!(parts.prefix(), None);
-        assert_eq!(parts.radix(), 10);
         assert_eq!(parts.results_in_exact(), None);
         assert_eq!(parts.results_in_inexact(), None);
-
-        assert_eq!(parts.real().as_ref(), "123");
-        assert_eq!(parts.real_exponent(), None);
-        assert!(parts.is_real_integer());
-        assert!(!parts.is_real_rational());
-        assert!(!parts.is_real_float());
-        assert!(!parts.is_real_infinity());
-        assert!(!parts.is_real_nan());
-
         assert_eq!(parts.is_polar_complex(), None);
-        assert_eq!(parts.is_cartesian_complex(), None);
 
-        assert_eq!(parts.imaginary(), None);
-        assert_eq!(parts.imaginary_exponent(), None);
-        assert_eq!(parts.is_imaginary_integer(), None);
-        assert_eq!(parts.is_imaginary_rational(), None);
-        assert_eq!(parts.is_imaginary_float(), None);
-        assert_eq!(parts.is_imaginary_infinity(), None);
-        assert_eq!(parts.is_imaginary_nan(), None);
+        assert_eq!(parts.real().radix(), 10);
+        assert_eq!(parts.real().value(), "123");
+        assert_eq!(parts.real().exponent_value(), None);
+        assert!(parts.real().is_integer());
+        assert!(!parts.real().is_rational());
+        assert!(!parts.real().is_float());
+        assert!(!parts.real().is_infinity());
+        assert!(!parts.real().is_nan());
+
+        assert!(parts.imaginary().is_none());
     }
 
     #[test]
     fn test_parse_rational() {
         let parts = parse("1/23").unwrap();
 
-        assert_eq!(parts.prefix(), None);
-        assert_eq!(parts.radix(), 10);
         assert_eq!(parts.results_in_exact(), None);
         assert_eq!(parts.results_in_inexact(), None);
-
-        assert_eq!(parts.real().as_ref(), "1/23");
-        assert_eq!(parts.real_exponent(), None);
-        assert!(!parts.is_real_integer());
-        assert!(parts.is_real_rational());
-        assert!(!parts.is_real_float());
-        assert!(!parts.is_real_infinity());
-        assert!(!parts.is_real_nan());
-
         assert_eq!(parts.is_polar_complex(), None);
-        assert_eq!(parts.is_cartesian_complex(), None);
 
-        assert_eq!(parts.imaginary(), None);
-        assert_eq!(parts.imaginary_exponent(), None);
-        assert_eq!(parts.is_imaginary_integer(), None);
-        assert_eq!(parts.is_imaginary_rational(), None);
-        assert_eq!(parts.is_imaginary_float(), None);
-        assert_eq!(parts.is_imaginary_infinity(), None);
-        assert_eq!(parts.is_imaginary_nan(), None);
+        assert_eq!(parts.real().radix(), 10);
+        assert_eq!(parts.real().value(), "1/23");
+        assert_eq!(parts.real().exponent_value(), None);
+        assert!(!parts.real().is_integer());
+        assert!(parts.real().is_rational());
+        assert!(!parts.real().is_float());
+        assert!(!parts.real().is_infinity());
+        assert!(!parts.real().is_nan());
+
+        assert!(parts.imaginary().is_none());
     }
 
     #[test]
     fn test_parse_float() {
         let parts = parse("12.3").unwrap();
 
-        assert_eq!(parts.prefix(), None);
-        assert_eq!(parts.radix(), 10);
         assert_eq!(parts.results_in_exact(), None);
         assert_eq!(parts.results_in_inexact(), None);
-
-        assert_eq!(parts.real().as_ref(), "12.3");
-        assert_eq!(parts.real_exponent(), None);
-        assert!(!parts.is_real_integer());
-        assert!(!parts.is_real_rational());
-        assert!(parts.is_real_float());
-        assert!(!parts.is_real_infinity());
-        assert!(!parts.is_real_nan());
-
         assert_eq!(parts.is_polar_complex(), None);
-        assert_eq!(parts.is_cartesian_complex(), None);
 
-        assert_eq!(parts.imaginary(), None);
-        assert_eq!(parts.imaginary_exponent(), None);
-        assert_eq!(parts.is_imaginary_integer(), None);
-        assert_eq!(parts.is_imaginary_rational(), None);
-        assert_eq!(parts.is_imaginary_float(), None);
-        assert_eq!(parts.is_imaginary_infinity(), None);
-        assert_eq!(parts.is_imaginary_nan(), None);
+        assert_eq!(parts.real().radix(), 10);
+        assert_eq!(parts.real().value(), "12.3");
+        assert_eq!(parts.real().exponent_value(), None);
+        assert!(!parts.real().is_integer());
+        assert!(!parts.real().is_rational());
+        assert!(parts.real().is_float());
+        assert!(!parts.real().is_infinity());
+        assert!(!parts.real().is_nan());
+
+        assert!(parts.imaginary().is_none());
     }
 
     #[test]
     fn test_parse_float_exp() {
         let parts = parse("12.3e-4").unwrap();
 
-        assert_eq!(parts.prefix(), None);
-        assert_eq!(parts.radix(), 10);
         assert_eq!(parts.results_in_exact(), None);
         assert_eq!(parts.results_in_inexact(), None);
-
-        assert_eq!(parts.real().as_ref(), "12.3e-4");
-        assert_eq!(parts.real_exponent(), Some(Cow::Borrowed("-4")));
-        assert!(!parts.is_real_integer());
-        assert!(!parts.is_real_rational());
-        assert!(parts.is_real_float());
-        assert!(!parts.is_real_infinity());
-        assert!(!parts.is_real_nan());
-
         assert_eq!(parts.is_polar_complex(), None);
-        assert_eq!(parts.is_cartesian_complex(), None);
 
-        assert_eq!(parts.imaginary(), None);
-        assert_eq!(parts.imaginary_exponent(), None);
-        assert_eq!(parts.is_imaginary_integer(), None);
-        assert_eq!(parts.is_imaginary_rational(), None);
-        assert_eq!(parts.is_imaginary_float(), None);
-        assert_eq!(parts.is_imaginary_infinity(), None);
-        assert_eq!(parts.is_imaginary_nan(), None);
+        assert_eq!(parts.real().radix(), 10);
+        assert_eq!(parts.real().value(), "12.3e-4");
+        assert_eq!(parts.real().exponent_value(), Some(Cow::Borrowed("-4")));
+        assert!(!parts.real().is_integer());
+        assert!(!parts.real().is_rational());
+        assert!(parts.real().is_float());
+        assert!(!parts.real().is_infinity());
+        assert!(!parts.real().is_nan());
+
+        assert!(parts.imaginary().is_none());
     }
 
     #[test]
     fn test_parse_complex() {
         let parts = parse("3.0+4.0i").unwrap();
 
-        assert_eq!(parts.prefix(), None);
-        assert_eq!(parts.radix(), 10);
         assert_eq!(parts.results_in_exact(), None);
         assert_eq!(parts.results_in_inexact(), None);
-
-        assert_eq!(parts.real().as_ref(), "3.0");
-        assert_eq!(parts.real_exponent(), None);
-        assert!(!parts.is_real_integer());
-        assert!(!parts.is_real_rational());
-        assert!(parts.is_real_float());
-        assert!(!parts.is_real_infinity());
-        assert!(!parts.is_real_nan());
-
         assert_eq!(parts.is_polar_complex(), Some(false));
-        assert_eq!(parts.is_cartesian_complex(), Some(true));
 
-        assert_eq!(parts.imaginary().unwrap().as_ref(), "+4.0");
-        assert_eq!(parts.imaginary_exponent(), None);
-        assert_eq!(parts.is_imaginary_integer(), Some(false));
-        assert_eq!(parts.is_imaginary_rational(), Some(false));
-        assert_eq!(parts.is_imaginary_float(), Some(true));
-        assert_eq!(parts.is_imaginary_infinity(), Some(false));
-        assert_eq!(parts.is_imaginary_nan(), Some(false));
+        assert_eq!(parts.real().radix(), 10);
+        assert_eq!(parts.real().value(), "3.0");
+        assert_eq!(parts.real().exponent_value(), None);
+        assert!(!parts.real().is_integer());
+        assert!(!parts.real().is_rational());
+        assert!(parts.real().is_float());
+        assert!(!parts.real().is_infinity());
+        assert!(!parts.real().is_nan());
+
+        let imaginary = parts.imaginary().expect("There's no imaginary part!");
+
+        assert_eq!(imaginary.radix(), 10);
+        assert_eq!(imaginary.value(), "+4.0");
+        assert_eq!(imaginary.exponent_value(), None);
+        assert!(!imaginary.is_integer());
+        assert!(!imaginary.is_rational());
+        assert!(imaginary.is_float());
+        assert!(!imaginary.is_infinity());
+        assert!(!imaginary.is_nan());
     }
 }

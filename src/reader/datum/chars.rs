@@ -12,15 +12,19 @@ YYYYY
 use crate::error::{invalid_char_input, invalid_unicode_value, unknown_char_name, Error};
 use crate::lexer::token::Span;
 use crate::reader::datum::SimpleDatumValue;
-use crate::syntax::{CHAR_HEX_ESCAPE_END, CHAR_HEX_ESCAPE_START, CHAR_PREFIX_STR};
+use crate::syntax::{
+    CHAR_ESCAPE_ALARM, CHAR_ESCAPE_BACKSPACE, CHAR_ESCAPE_NEWLINE, CHAR_ESCAPE_RETURN,
+    CHAR_ESCAPE_TAB, CHAR_HEX_ESCAPE_END, CHAR_HEX_ESCAPE_START, CHAR_NAME_ALARM,
+    CHAR_NAME_BACKSPACE, CHAR_NAME_DELETE, CHAR_NAME_ESCAPE, CHAR_NAME_NEWLINE, CHAR_NAME_NULL,
+    CHAR_NAME_RETURN, CHAR_NAME_SPACE, CHAR_NAME_TAB, CHAR_PREFIX_STR, CHAR_VALUE_ALARM,
+    CHAR_VALUE_BACKSLASH, CHAR_VALUE_BACKSPACE, CHAR_VALUE_DELETE, CHAR_VALUE_ESCAPE,
+    CHAR_VALUE_NEWLINE, CHAR_VALUE_NULL, CHAR_VALUE_QUOTE, CHAR_VALUE_RETURN, CHAR_VALUE_SPACE,
+    CHAR_VALUE_TAB, CHAR_VALUE_VBAR,
+};
 use std::fmt::Write;
 use std::fmt::{Debug, Display};
 use std::iter::FusedIterator;
 use tracing::error;
-
-// ------------------------------------------------------------------------------------------------
-// Public Macros
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Public Types
@@ -42,10 +46,6 @@ pub struct EscapeUnicode {
 pub struct EscapeDefault {
     state: EscapeDefaultState,
 }
-
-// ------------------------------------------------------------------------------------------------
-// Public Functions
-// ------------------------------------------------------------------------------------------------
 
 // ------------------------------------------------------------------------------------------------
 // Private Types
@@ -95,24 +95,24 @@ impl SimpleDatumValue for SChar {
 
         if s.len() > 2 && s.starts_with(CHAR_PREFIX_STR) {
             let s = &s[2..];
-            if s == "alarm" {
-                Ok(SChar::from('\u{07}'))
-            } else if s == "backspace" {
-                Ok(SChar::from('\u{08}'))
-            } else if s == "delete" {
-                Ok(SChar::from('\u{7f}'))
-            } else if s == "escape" {
-                Ok(SChar::from('\u{1b}'))
-            } else if s == "newline" {
-                Ok(SChar::from('\u{0a}'))
-            } else if s == "null" {
-                Ok(SChar::from('\u{00}'))
-            } else if s == "return" {
-                Ok(SChar::from('\u{0d}'))
-            } else if s == "space" {
-                Ok(SChar::from(' '))
-            } else if s == "tab" {
-                Ok(SChar::from('\u{09}'))
+            if s == CHAR_NAME_ALARM {
+                Ok(SChar::from(CHAR_VALUE_ALARM))
+            } else if s == CHAR_NAME_BACKSPACE {
+                Ok(SChar::from(CHAR_VALUE_BACKSPACE))
+            } else if s == CHAR_NAME_DELETE {
+                Ok(SChar::from(CHAR_VALUE_DELETE))
+            } else if s == CHAR_NAME_ESCAPE {
+                Ok(SChar::from(CHAR_VALUE_ESCAPE))
+            } else if s == CHAR_NAME_NEWLINE {
+                Ok(SChar::from(CHAR_VALUE_NEWLINE))
+            } else if s == CHAR_NAME_NULL {
+                Ok(SChar::from(CHAR_VALUE_NULL))
+            } else if s == CHAR_NAME_RETURN {
+                Ok(SChar::from(CHAR_VALUE_RETURN))
+            } else if s == CHAR_NAME_SPACE {
+                Ok(SChar::from(CHAR_VALUE_SPACE))
+            } else if s == CHAR_NAME_TAB {
+                Ok(SChar::from(CHAR_VALUE_TAB))
             } else if s.starts_with(CHAR_HEX_ESCAPE_START) && s.ends_with(CHAR_HEX_ESCAPE_END) {
                 let s = &s[1..s.len() - 1];
                 let cp = u32::from_str_radix(s, 16)
@@ -140,12 +140,14 @@ impl SChar {
     /// See [`char::escape_default`]
     pub fn escape_default(&self) -> EscapeDefault {
         let init_state = match self.0 {
-            '\u{07}' => EscapeDefaultState::Backslash('a'),
-            '\u{08}' => EscapeDefaultState::Backslash('b'),
-            '\t' => EscapeDefaultState::Backslash('t'),
-            '\r' => EscapeDefaultState::Backslash('r'),
-            '\n' => EscapeDefaultState::Backslash('n'),
-            '\"' | '\\' | '|' => EscapeDefaultState::Backslash(self.0),
+            CHAR_VALUE_ALARM => EscapeDefaultState::Backslash(CHAR_ESCAPE_ALARM),
+            CHAR_VALUE_BACKSPACE => EscapeDefaultState::Backslash(CHAR_ESCAPE_BACKSPACE),
+            CHAR_VALUE_TAB => EscapeDefaultState::Backslash(CHAR_ESCAPE_TAB),
+            CHAR_VALUE_RETURN => EscapeDefaultState::Backslash(CHAR_ESCAPE_RETURN),
+            CHAR_VALUE_NEWLINE => EscapeDefaultState::Backslash(CHAR_ESCAPE_NEWLINE),
+            CHAR_VALUE_QUOTE | CHAR_VALUE_BACKSLASH | CHAR_VALUE_VBAR => {
+                EscapeDefaultState::Backslash(self.0)
+            }
             _ if self.is_non_printing() => EscapeDefaultState::Unicode(self.escape_unicode()),
             _ => EscapeDefaultState::Char(self.0),
         };
@@ -219,7 +221,7 @@ impl Iterator for EscapeDefault {
         match self.state {
             EscapeDefaultState::Backslash(c) => {
                 self.state = EscapeDefaultState::Char(c);
-                Some('\\')
+                Some(CHAR_VALUE_BACKSLASH)
             }
             EscapeDefaultState::Char(c) => {
                 self.state = EscapeDefaultState::Done;
@@ -245,7 +247,7 @@ impl Iterator for EscapeDefault {
         match self.state {
             EscapeDefaultState::Backslash(c) if n == 0 => {
                 self.state = EscapeDefaultState::Char(c);
-                Some('\\')
+                Some(CHAR_VALUE_BACKSLASH)
             }
             EscapeDefaultState::Backslash(c) if n == 1 => {
                 self.state = EscapeDefaultState::Done;
@@ -309,11 +311,11 @@ impl Iterator for EscapeUnicode {
         match self.state {
             EscapeUnicodeState::Backslash => {
                 self.state = EscapeUnicodeState::Type;
-                Some('\\')
+                Some(CHAR_VALUE_BACKSLASH)
             }
             EscapeUnicodeState::Type => {
                 self.state = EscapeUnicodeState::Value;
-                Some('x')
+                Some(CHAR_HEX_ESCAPE_START)
             }
             EscapeUnicodeState::Value => {
                 let hex_digit = ((self.c as u32) >> (self.hex_digit_idx * 4)) & 0xf;
@@ -327,7 +329,7 @@ impl Iterator for EscapeUnicode {
             }
             EscapeUnicodeState::Semicolon => {
                 self.state = EscapeUnicodeState::Done;
-                Some(';')
+                Some(CHAR_HEX_ESCAPE_END)
             }
             EscapeUnicodeState::Done => None,
         }
@@ -351,7 +353,7 @@ impl Iterator for EscapeUnicode {
             EscapeUnicodeState::Semicolon
             | EscapeUnicodeState::Value
             | EscapeUnicodeState::Type
-            | EscapeUnicodeState::Backslash => Some(';'),
+            | EscapeUnicodeState::Backslash => Some(CHAR_HEX_ESCAPE_END),
         }
     }
 }
@@ -372,7 +374,3 @@ impl ExactSizeIterator for EscapeUnicode {
 }
 
 impl FusedIterator for EscapeUnicode {}
-
-// ------------------------------------------------------------------------------------------------
-// Private Functions
-// ------------------------------------------------------------------------------------------------

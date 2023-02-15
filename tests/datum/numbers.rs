@@ -114,9 +114,11 @@ success_case!(negative_nan, "-nan.0" => SNumber, "-nan.0");
 
 // ------------------------------------------------------------------------------------------------
 
-success_case!(fixnum_zero_exp, "0e20" => SNumber, "0");
+success_case!(flonum_exp, "123e20" => SNumber, "1.23e22");
 
-success_case!(fixnum_exp, "123e20" => SNumber, "12300000000000000000000");
+success_case!(flonum_positive_exp, "123e+20" => SNumber, "1.23e22");
+
+success_case!(flonum_negative_exp, "123e-20" => SNumber, "1.23e-18");
 
 success_case!(flonum_zero_exp, "0.0e20" => SNumber, "0.0");
 
@@ -124,15 +126,7 @@ success_case!(flonum_dot_one_exp, ".1e20" => SNumber, "1e19");
 
 success_case!(flonum_one_dot_exp, "1.e20" => SNumber, "1e20");
 
-success_case!(flonum_exp, "123.45e20" => SNumber, "1.2345e22");
-
 success_case!(flonum_inexact_exp, "#i123.45e20" => SNumber, "1.2345e22");
-
-// ------------------------------------------------------------------------------------------------
-
-success_case!(positive_fixnum_exp, "123e+20" => SNumber, "12300000000000000000000");
-
-success_case!(negative_fixnum_exp, "123e-20" => SNumber, "12300000000000000000000");
 
 // ------------------------------------------------------------------------------------------------
 // Failure cases

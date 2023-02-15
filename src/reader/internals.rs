@@ -1,14 +1,3 @@
-/*!
-One-line description.
-
-More detailed description, with
-
-# Example
-
-YYYYY
-
-*/
-
 use crate::error::Error;
 use crate::lexer::token::Span;
 use crate::reader::datum::{Datum, SByteVector, SList, SVector};
@@ -28,6 +17,7 @@ pub(crate) enum State {
     Dot(Span, Option<Datum>),
     Vector(Span, SVector),
     ByteVector(Span, SByteVector),
+    #[allow(dead_code)]
     FastForward(Error),
 }
 
