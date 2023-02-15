@@ -221,7 +221,7 @@ impl SNumber {
 
     pub fn cast_as_fixnum(self) -> Fixnum {
         match self {
-            Self::Fixnum(v) => v.clone(),
+            Self::Fixnum(v) => v,
             Self::Ratnum(v) => Fixnum::from(v.into_value().to_integer()),
             Self::Flonum(v) => Fixnum::from(v.into_value().round() as Integer),
             Self::Complexnum(v) => Fixnum::from(v.into_value().abs().round() as Integer),
@@ -232,7 +232,7 @@ impl SNumber {
         match self {
             Self::Fixnum(v) => Flonum::from(v),
             Self::Ratnum(v) => Flonum::from(v),
-            Self::Flonum(v) => v.clone(),
+            Self::Flonum(v) => v,
             Self::Complexnum(v) => Flonum::from(v.into_value().abs()),
         }
     }

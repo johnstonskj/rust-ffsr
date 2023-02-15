@@ -1201,7 +1201,7 @@ impl Error {
                         Label::new(span.as_range())
                             .with_message("This is not a valid byte"),
                     )
-                    .with_note(format!("Expecting an exact integer in the range 0..=255"))
+                    .with_note("Expecting an exact integer in the range 0..=255")
                     .finish(),
             ),
             // --------------------------------------------------------------

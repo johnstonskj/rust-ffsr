@@ -158,7 +158,7 @@ impl SByteVector {
                 "Invalid numeric type {}, expecting fixnum",
                 number.type_string()
             );
-            return invalid_byte_input(span);
+            invalid_byte_input(span)
         }
     }
 

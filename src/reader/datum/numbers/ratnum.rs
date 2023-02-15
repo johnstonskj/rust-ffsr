@@ -124,7 +124,7 @@ impl Ratnum {
 
     pub fn as_integer(&self) -> Option<Fixnum> {
         if self.0.is_integer() {
-            Some(self.0.numer().clone().into())
+            Some((*self.0.numer()).into())
         } else {
             None
         }
